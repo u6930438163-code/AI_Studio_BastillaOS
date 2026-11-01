@@ -18,6 +18,29 @@ reskin.
 The ISO build uses Docker so the Debian live-build tools run on Debian 13 rather
 than inheriting Ubuntu or another host's build environment.
 
+The repository contains both the BastillaOS web application and inputs for an
+intended bootable Debian Live ISO. Passing source/configuration checks does not
+prove that an ISO boots; verify a produced image in an amd64 VM or on dedicated
+hardware before treating it as bootable. Codespaces can run and smoke-test the
+web application without KVM, but its Docker environment is not the supported
+place to build or validate the installer ISO.
+
+Run `bash scripts/diagnose-host.sh` from the repository root to inspect local
+prerequisites. The optional `VM_Gemini_4` guest is separate from the web app.
+For accelerated VM use, run it on a Linux host with Docker Compose, a readable
+and writable `/dev/kvm`, and permission to access the Docker daemon:
+
+```sh
+bash scripts/diagnose-host.sh
+bash scripts/auto-start-vm.sh
+```
+
+The launcher explicitly maps `/dev/kvm` into the QEMU container and grants its
+numeric device group. QEMU TCG can fall back to software emulation when started
+without KVM, but it is very slow and still requires Docker. Codespaces does not
+start this guest automatically. The web application smoke test does not boot
+or validate either VM profile or the Debian ISO.
+
 ## Build an installable ISO
 
 From the repository root:

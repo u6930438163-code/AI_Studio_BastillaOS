@@ -9,19 +9,19 @@ local Ollama-powered chat, local kernel state, diagnostics and application manag
 - Node.js 22 or newer
 - npm
 - Python 3 for the local kernel
-- Ollama with the configured local chat model
+- Ollama with a configured local chat model for model-backed chat (optional for
+  the UI and deterministic command protocol)
 
 ## Run locally
 
 ```sh
 npm ci
-cp .env.example .env
-ollama pull gemma3:4b
-npm run dev
+LLM_PROVIDERS=none CHAT_LOCAL_FALLBACK=on npm run dev
 ```
 
-Ollama runs locally at `http://127.0.0.1:11434`; chat requires no model API key
-or cloud connection. The default `gemma3:4b` model (4B parameters, ~3.3 GB
+This starts the UI and deterministic local features without KVM, Docker,
+Ollama, or API keys. For model-backed chat, Ollama runs locally at
+`http://127.0.0.1:11434`; the default `gemma3:4b` model (4B parameters, ~3.3 GB
 download) needs roughly 5 GB of free RAM and supports image (vision) input; in
 constrained environments pick a smaller model instead (e.g. `llama3.2`, faster
 on CPU but without image analysis). Set
@@ -33,6 +33,20 @@ included in the prompt; image attachments (JPEG/PNG) work with vision models
 such as `gemma3:4b` (models without vision reject them with a clear error),
 while PDF input requires the optional Gemini provider.
 The deterministic command protocol works independently of Ollama.
+
+## Codespaces and phone
+
+The devcontainer starts only the web application, with deterministic local
+chat fallback enabled; it does not provision the optional QEMU guest. Run
+`bash scripts/diagnose-host.sh` for a read-only report of KVM, QEMU, Docker,
+architecture, and current device/socket permissions. Run `npm run smoke` to
+start the app briefly on loopback and check its HTML and deterministic engine
+status without contacting external model services.
+
+In Codespaces, open the **Ports** tab and use the forwarded port `3000` URL on
+your phone. Keep the port **Private** and sign in to GitHub in the phone
+browser. The app itself has no user authentication; do not make the port public
+or expose it on an untrusted network.
 
 `npm run check:gemini` checks the optional Gemini configuration for the
 separate `VM_Gemini_4` profile; Gemini is not used by chat.
@@ -174,6 +188,7 @@ local to this server and are not shared with remote services.
 
 ```sh
 npm test
+npm run smoke
 npm run lint
 npm run build
 npm run build:server

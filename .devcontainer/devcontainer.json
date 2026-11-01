@@ -5,5 +5,10 @@
     3000,
     3001
   ],
-  "postStartCommand": "setsid nohup bash scripts/keep-alive.sh > /dev/null 2>&1 & setsid nohup bash scripts/auto-start-vm.sh > /dev/null 2>&1 &"
+  "containerEnv": {
+    "HOST": "0.0.0.0",
+    "LLM_PROVIDERS": "none",
+    "CHAT_LOCAL_FALLBACK": "on"
+  },
+  "postStartCommand": "setsid nohup bash scripts/keep-alive.sh > /dev/null 2>&1 &"
 }

@@ -6384,9 +6384,10 @@ async function startServer() {
   }
 
   const bindServer = (port: number) => {
-    const server = app.listen(port, '0.0.0.0', () => {
+    const host = process.env.HOST || '0.0.0.0';
+    const server = app.listen(port, host, () => {
       activeServerPort = port;
-      console.log(`[SVL-KERNEL] Server listening on http://0.0.0.0:${port}`);
+      console.log(`[SVL-KERNEL] Server listening on http://${host}:${port}`);
       if (usesOllama()) {
         // Rozgrzewka w tle: wagi modelu trafiają do pamięci, zanim padnie pierwsza wiadomość.
         void warmupOllama(LLM_CHAIN_CONFIG, AbortSignal.timeout(180000)).then((warm) => {

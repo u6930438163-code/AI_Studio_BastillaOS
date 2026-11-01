@@ -1,0 +1,6 @@
+services:
+  vm-gemini-4:
+    devices:
+      - /dev/kvm:/dev/kvm
+    group_add:
+      - "${KVM_GID:?Set KVM_GID to the numeric group ID of /dev/kvm}"

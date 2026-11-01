@@ -12,7 +12,10 @@ export default defineConfig(() => {
       },
     },
     server: {
-      allowedHosts: ['terminal.local'],
+      allowedHosts: [
+        'terminal.local',
+        ...(process.env.CODESPACE_NAME ? [`${process.env.CODESPACE_NAME}-3000.app.github.dev`] : []),
+      ],
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

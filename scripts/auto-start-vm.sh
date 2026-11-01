@@ -23,6 +23,10 @@ mkdir -p bastillaos/vm-gemini-4/data
 chmod 700 bastillaos/vm-gemini-4/data
 export VM_UID="$(id -u)" VM_GID="$(id -g)" KVM_GID="$(stat -c %g /dev/kvm)"
 echo "Starting existing VM profile (Docker will build QEMU image if needed)."
-docker compose -p svl-vm-gemini-4 -f bastillaos/vm-gemini-4/compose.yaml up -d --build
-docker compose -p svl-vm-gemini-4 -f bastillaos/vm-gemini-4/compose.yaml ps
+docker compose -p svl-vm-gemini-4 \
+  -f bastillaos/vm-gemini-4/compose.yaml \
+  -f bastillaos/vm-gemini-4/compose.kvm.yaml up -d --build
+docker compose -p svl-vm-gemini-4 \
+  -f bastillaos/vm-gemini-4/compose.yaml \
+  -f bastillaos/vm-gemini-4/compose.kvm.yaml ps
 echo "[$(date -Is)] VM provisioning command finished; guest boot may still be in progress."
