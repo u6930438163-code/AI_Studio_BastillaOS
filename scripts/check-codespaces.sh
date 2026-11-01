@@ -17,8 +17,24 @@ check 'Node.js available' command -v node
 check 'Python available' command -v python3
 check 'npm available' command -v npm
 check 'Dependencies installed' test -d node_modules
-check 'BastillaOS HTTP metrics (port 3000)' curl -fsS --max-time 5 http://127.0.0.1:3000/api/system/metrics
-check 'BastillaOS AI status API (port 3000)' curl -fsS --max-time 5 http://127.0.0.1:3000/api/ai/status
+check_json_endpoint() {
+  local url="$1"
+  local required_key="$2"
+  local payload
+  payload="$(curl -fsS --max-time 5 "$url")" || return 1
+  printf '%s' "$payload" | node -e '
+    let raw="";
+    process.stdin.on("data", chunk => raw += chunk);
+    process.stdin.on("end", () => {
+      try {
+        const data=JSON.parse(raw);
+        if (!data || typeof data !== "object" || !(process.argv[1] in data)) process.exit(1);
+      } catch { process.exit(1); }
+    });
+  ' "$required_key"
+}
+check 'BastillaOS HTTP metrics JSON (port 3000)' check_json_endpoint http://127.0.0.1:3000/api/system/metrics cpuPercent
+check 'BastillaOS AI status JSON (port 3000)' check_json_endpoint http://127.0.0.1:3000/api/ai/status protocol
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   echo 'PASS Docker daemon accessible (optional for web app)'
 else
