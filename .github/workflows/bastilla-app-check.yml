@@ -76,7 +76,7 @@ jobs:
           trap 'kill "$mcp_pid" "$mock_pid" 2>/dev/null || true' EXIT
           ready=0
           for i in $(seq 1 30); do
-            if curl -fsS --max-time 2 http://127.0.0.1:3902/api/ollama/models >/dev/null 2>&1 && (echo >/dev/tcp/127.0.0.1/8000) >/dev/null 2>&1; then
+            if [[ "$(curl -sS --max-time 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:3902/api/ollama/models || true)" == "503" ]] && (echo >/dev/tcp/127.0.0.1/8000) >/dev/null 2>&1; then
               ready=1
               break
             fi
