@@ -41,7 +41,7 @@ async def agents_status() -> dict:
 
 @mcp.tool()
 async def agent_command(agent: str = "triad", command: str = "SYSTEM_STATUS") -> dict:
-    """Run one predefined read-only diagnostic command for an agent role."""
+    """Run an allowlisted diagnostic; the BastillaOS API records its transcript."""
     if agent not in {"triad", "Alex", "Astyria", "Aurelius"}:
         raise ValueError("Unsupported agent role")
     if command not in {"SYSTEM_STATUS", "DATA_STORE_AUDIT", "VERSION_TIMELINE"}:
