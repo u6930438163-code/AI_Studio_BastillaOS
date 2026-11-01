@@ -25,6 +25,7 @@ check 'Dependencies installed' test -d node_modules
 check_json_endpoint() {
   local url="$1"
   local required_key="$2"
+  local required_type="$3"
   local payload
   payload="$(curl -fsS --max-time 5 "$url")" || return 1
   printf '%s' "$payload" | node -e '
@@ -33,13 +34,13 @@ check_json_endpoint() {
     process.stdin.on("end", () => {
       try {
         const data=JSON.parse(raw);
-        if (!data || typeof data !== "object" || !(process.argv[1] in data)) process.exit(1);
+        if (!data || typeof data !== "object" || Array.isArray(data) || typeof data[process.argv[1]] !== process.argv[2]) process.exit(1);
       } catch { process.exit(1); }
     });
-  ' "$required_key"
+  ' "$required_key" "$required_type"
 }
-check 'BastillaOS HTTP metrics JSON' check_json_endpoint "http://127.0.0.1:${PORT}/api/system/metrics" cpuPercent
-check 'BastillaOS AI status JSON' check_json_endpoint "http://127.0.0.1:${PORT}/api/ai/status" protocol
+check 'BastillaOS HTTP metrics JSON' check_json_endpoint "http://127.0.0.1:${PORT}/api/system/metrics" cpuPercent number
+check 'BastillaOS AI status JSON' check_json_endpoint "http://127.0.0.1:${PORT}/api/ai/status" protocol string
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   echo 'PASS Docker daemon accessible (optional for web app)'
 else
