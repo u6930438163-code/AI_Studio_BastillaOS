@@ -1,4 +1,4 @@
-"""Test the local MCP handshake and live Ollama model reachability."""
+"""Verify MCP handshake and tool execution; model availability is a separate check."""
 import asyncio
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
@@ -16,9 +16,18 @@ async def main():
                 raise RuntimeError("MCP ollama_status returned a tool error")
             if not result.content:
                 raise RuntimeError("MCP ollama_status returned an empty response")
-            print("MCP handshake and Ollama diagnostic tool call: OK")
+            agent_result = await session.call_tool(
+                "agent_command", {"agent": "triad", "command": "SYSTEM_STATUS"}
+            )
+            if agent_result.isError:
+                raise RuntimeError("MCP agent_command returned a tool error")
+            if not agent_result.content:
+                raise RuntimeError("MCP agent_command returned an empty response")
+            print("MCP handshake and both diagnostic tools: OK")
             print("Tools:", ", ".join(sorted(names)))
             print("Ollama diagnostic:", result)
+            print("Agent diagnostic:", agent_result)
+            print("Note: tool responses do not independently prove an LLM model is online.")
 
 if __name__ == "__main__":
     asyncio.run(main())
