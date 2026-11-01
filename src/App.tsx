@@ -391,11 +391,14 @@ export default function App() {
       ].includes(normalizedCommand);
       const response = await fetch(isFullChatRepair ? '/api/astyria/mission' : '/api/triad/message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Bastilla-UI': '1' },
         body: JSON.stringify(isFullChatRepair
           ? { action: 'full_system_app_chat_repair', userMessage: message.trim() }
           : { message, agent: chatAgent, attachments }),
       });
+      if (!response.headers.get('content-type')?.includes('application/json')) {
+        throw new Error(`Połączenie zwróciło stronę zamiast API (HTTP ${response.status}). Odśwież podgląd lub sprawdź publikację serwera.`);
+      }
       const result = await response.json();
       if (!response.ok || result.success !== true || typeof result.reply !== 'string') {
         throw new Error(result.error || `Nie udało się wysłać wiadomości (HTTP ${response.status}).`);

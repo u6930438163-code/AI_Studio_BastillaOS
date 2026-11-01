@@ -1,5 +1,6 @@
 import express from 'express';
 import { registerGptActions } from './src/lib/gptActions.mjs';
+import { sendChatError } from './src/lib/chatTransport.mjs';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
@@ -5748,10 +5749,7 @@ app.post('/api/triad/message', async (req, res) => {
   // CZAT TRIADY: swobodna rozmowa — Gemini → xAI (Grok) → Ollama (lokalny model) → without_nlp.
   const llmProviders = configuredProviders(LLM_CHAIN_CONFIG);
   if (llmProviders.length === 0 && !CHAT_LOCAL_FALLBACK) {
-    return res.status(503).json({
-      success: false,
-      error: 'Brak skonfigurowanego modelu czatu. Ustaw LLM_PROVIDERS="ollama" (i uruchom Ollamę: npm run setup:ollama) albo klucze API w .env.',
-    });
+    return sendChatError(req, res, 503, 'Brak skonfigurowanego modelu czatu. Ustaw LLM_PROVIDERS="ollama" i uruchom Ollamę albo skonfiguruj dostawcę API w sekretach serwera.');
   }
   if (attachments.some((attachment) => attachment.mimeType === 'application/pdf') && !llmProviders.includes('gemini')) {
     return res.status(400).json({
@@ -5813,10 +5811,7 @@ app.post('/api/triad/message', async (req, res) => {
     const failed = results.filter((result) => result.error);
     if (failed.length > 0) {
       // Bez awaryjnego silnika nic nie zapisujemy do historii — operator widzi prawdziwy powód awarii.
-      return res.status(502).json({
-        success: false,
-        error: `Model Ollama nie odpowiedział. ${failed.map((result) => result.error).join(' | ')}`.slice(0, 900),
-      });
+      return sendChatError(req, res, 502, `Model AI nie odpowiedział. ${failed.map((result) => result.error).join(' | ')}`.slice(0, 900));
     }
 
     const replyMap = {} as Record<ChatAgentName, string>;
@@ -5865,7 +5860,7 @@ app.post('/api/triad/message', async (req, res) => {
       state: finalState,
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error?.message || 'Nie udało się uzyskać odpowiedzi agentów.' });
+    return sendChatError(req, res, 500, error?.message || 'Nie udało się uzyskać odpowiedzi agentów.');
   }
 });
 

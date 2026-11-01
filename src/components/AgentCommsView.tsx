@@ -349,7 +349,7 @@ export const AgentCommsView: React.FC<AgentCommsViewProps> = ({
         >
           {sendError && (
             <div role="alert" aria-live="assertive" className="rounded-lg border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-200">
-              Nie udało się wykonać polecenia ani misji: {sendError}
+              Nie udało się wysłać żądania: {sendError}
             </div>
           )}
           {dataStore.chat_history.map((msg, idx) => {
@@ -501,7 +501,7 @@ export const AgentCommsView: React.FC<AgentCommsViewProps> = ({
           </label>
           <button
             type="submit"
-            aria-label="Wyślij wiadomość do Astyrii"
+            aria-label={`Wyślij wiadomość do ${{ triad: 'Triady', si_1: 'Arii', Alex: 'Alexa', Astyria: 'Astyrii', Aurelius: 'Aureliusa' }[selectedTarget]}`}
             disabled={(!messageText.trim() && chatAttachments.length === 0) || isLoading}
             className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-2.5 py-2.5 font-mono text-xs font-bold text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.3)] transition hover:from-emerald-400 hover:to-cyan-400 disabled:cursor-not-allowed disabled:opacity-40 sm:rounded-xl sm:px-3"
           >
