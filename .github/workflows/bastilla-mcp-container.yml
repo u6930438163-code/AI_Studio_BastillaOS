@@ -17,7 +17,7 @@ jobs:
       - name: Validate Codespaces MCP startup scripts
         run: |
           bash -n scripts/start-codespaces.sh scripts/start-codespaces-mcp.sh scripts/start-bastilla-mcp.sh
-          python3 -m py_compile integrations/mcp/server.py integrations/mcp/cloudrun.py integrations/mcp/smoke_test.py
+          python3 -m py_compile integrations/mcp/server.py integrations/mcp/cloudrun.py integrations/mcp/smoke_test.py integrations/mcp/healthcheck.py
       - name: Build MCP container
         run: docker build -f integrations/mcp/Dockerfile.cloudrun -t bastilla-mcp:test .
       - name: Verify MCP HTTP initialization
