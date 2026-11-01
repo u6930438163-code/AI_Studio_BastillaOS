@@ -3320,7 +3320,10 @@ async function autoSyncGitChanges(): Promise<void> {
 
 async function startAutoGitSync(): Promise<void> {
   try {
-    for (const file of await getAutoGitSyncChanges()) autoGitSyncStartupDirtyPaths.add(file);
+    // Zmiany istniejące przed startem także muszą zostać zsynchronizowane po stabilizacji.
+    for (const file of await getAutoGitSyncChanges()) {
+      autoGitSyncObservedPaths.set(file, { signature: getAutoGitSyncFileSignature(file), firstSeen: Date.now() });
+    }
     const { stdout: ahead } = await execFileAsync('git', ['rev-list', '--count', '@{upstream}..HEAD'], { timeout: 10000 });
     if (Number(ahead.trim()) > 0) {
       const { stdout: subjects } = await execFileAsync('git', ['log', '--format=%s', '@{upstream}..HEAD'], { timeout: 10000 });
