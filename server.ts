@@ -1,4 +1,5 @@
 import express from 'express';
+import { registerGptActions } from './src/lib/gptActions.mjs';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
@@ -6026,6 +6027,19 @@ app.get('/api/mcp/sse', (req, res) => {
   req.on('close', () => {
     clearInterval(keepAlive);
   });
+});
+
+// GPT Actions: consult the same models/personas without entering auto-execution routes.
+registerGptActions(app, {
+  providers: () => configuredProviders(LLM_CHAIN_CONFIG),
+  chat: async (agent: string, message: string, signal: AbortSignal) => {
+    const key = (agent === 'Aria' ? 'si_1' : agent) as ChatAgentName;
+    return generateWithChain(LLM_CHAIN_CONFIG, {
+      system: `${CHAT_AGENT_MISSIONS[key]} Odpowiadasz przez GPT Actions jako konsultant. Ten kanał nie ma narzędzi do wykonywania poleceń ani zapisu plików. Podawaj analizy i propozycje kodu; nie deklaruj wykonania zmian. Korzystaj wyłącznie z kontekstu przekazanego w wiadomości.`,
+      history: [],
+      message,
+    }, signal);
+  },
 });
 
 // OpenAPI 3.0 schema for ChatGPT Custom GPT Actions
