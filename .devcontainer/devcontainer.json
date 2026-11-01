@@ -15,7 +15,7 @@
       "visibility": "private"
     }
   },
-  "postCreateCommand": "npm ci && python3 --version && node --version && docker compose version",
+  "postCreateCommand": "npm ci && python3 --version && node --version && (docker compose version || echo 'Docker Compose unavailable; BastillaOS web app can still run')",
   "postStartCommand": "bash scripts/start-codespaces.sh",
   "customizations": {
     "vscode": {
