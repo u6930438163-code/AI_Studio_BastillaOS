@@ -54,6 +54,7 @@ import {
   validateChatAttachments,
 } from './src/kernel/chatAttachments';
 import { cleanAgentReplyText, extractAgentCommands } from './src/kernel/agentCommands';
+import { agentTaskRegistry } from './src/kernel/agentTasks';
 import {
   formatBestFitReport,
   selectBestFit,
@@ -272,14 +273,20 @@ app.get('/api/system/metrics', (_req, res) => {
 // Ollama model inventory. Uses the configured local Ollama API; no shell commands.
 app.get('/api/ollama/models', async (_req, res) => {
   const base = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, '');
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const response = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
     const data = await response.json() as { models?: unknown[] };
-    res.setHeader('Cache-Control', 'no-store');
     return res.json({ models: Array.isArray(data.models) ? data.models : [], configuredModel: LLM_CHAIN_CONFIG.ollamaModel, connected: true });
-  } catch {
-    return res.status(503).json({ models: [], configuredModel: LLM_CHAIN_CONFIG.ollamaModel, connected: false, error: 'Ollama nie odpowiada na skonfigurowanym adresie.' });
+  } catch (err: any) {
+    // Return 200 with connected: false so reverse proxies do not intercept 503 with HTML error pages
+    return res.status(200).json({
+      models: [],
+      configuredModel: LLM_CHAIN_CONFIG.ollamaModel,
+      connected: false,
+      error: `Ollama niedostępna: ${err?.message || 'Brak odpowiedzi na ' + base}. Kontener dysponuje ~5 GiB RAM (modele >4 GiB nie są wspierane).`
+    });
   }
 });
 
@@ -1815,7 +1822,7 @@ app.get('/api/apps/:id/files', (req, res) => {
   }
 });
 
-// 4. POST /api/apps/:id/save-file - Save or update code in an application
+// 4. POST /api/apps/:id/save-file - Save or update code in an application (auto-scaffolds if app does not exist)
 app.post('/api/apps/:id/save-file', (req, res) => {
   const appId = path.basename(req.params.id);
   const { filename, content } = req.body;
@@ -1826,13 +1833,46 @@ app.post('/api/apps/:id/save-file', (req, res) => {
 
   const safeFilename = path.basename(filename);
   const appPath = path.join(APPS_DIR, appId);
+
+  // Auto-scaffold app if directory does not exist
   if (!fs.existsSync(appPath)) {
-    return res.status(404).json({ error: 'Aplikacja nie istnieje' });
+    try {
+      fs.mkdirSync(appPath, { recursive: true });
+      const manifestPath = path.join(appPath, 'app.json');
+      const defaultManifest = {
+        id: appId,
+        name: appId.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        type: 'html5-web',
+        description: `Aplikacja zainicjalizowana automatycznie przez Studio Aplikacji (${appId}).`,
+        author: 'Astyria & Operator',
+        version: '1.0.0',
+        createdAt: new Date().toISOString(),
+        entrypoint: safeFilename.endsWith('.html') ? safeFilename : 'index.html',
+        files: [safeFilename],
+      };
+      fs.writeFileSync(manifestPath, JSON.stringify(defaultManifest, null, 2), 'utf-8');
+      pushSystemLog('healed', 'KERNEL', `[STUDIO APLIKACJI] Automatycznie zainicjalizowano strukturę aplikacji ${appId}.`);
+    } catch (scaffoldErr: any) {
+      return res.status(500).json({ error: `Nie można utworzyć katalogu aplikacji: ${scaffoldErr.message}` });
+    }
   }
 
   try {
     const filePath = path.join(appPath, safeFilename);
     fs.writeFileSync(filePath, content, 'utf-8');
+
+    // Keep app.json manifest file list in sync
+    const manifestPath = path.join(appPath, 'app.json');
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        if (Array.isArray(manifest.files) && !manifest.files.includes(safeFilename)) {
+          manifest.files.push(safeFilename);
+          fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+        }
+      } catch {}
+    }
+
     pushSystemLog('healed', 'KERNEL', `[STUDIO APLIKACJI] Zapisano plik ${safeFilename} w aplikacji ${appId}.`);
     res.json({ success: true, message: `Zapisano ${safeFilename}` });
   } catch (err: any) {
@@ -2105,8 +2145,8 @@ app.delete('/api/apps/:id', (req, res) => {
   }
 });
 
-// 8. POST /api/apps/execute - Terminal Execution Engine for Applications
-app.post('/api/apps/execute', async (req, res) => {
+// 8. POST /api/apps/execute (and alias /api/apps/command) - Terminal Execution Engine for Applications
+app.post(['/api/apps/execute', '/api/apps/command'], async (req, res) => {
   const { command, appDir } = req.body;
 
   if (!command || typeof command !== 'string') {
@@ -2323,7 +2363,10 @@ Plik został zapisany w katalogu /exports i jest natychmiast widoczny w zakładc
         output = 'Użycie: sh <komenda powłoki>';
       } else {
         try {
-          const runCwd = appDir && fs.existsSync(path.join(APPS_DIR, appDir)) ? path.join(APPS_DIR, appDir) : APPS_DIR;
+          const projectRoot = path.resolve('.');
+          const runCwd = appDir && fs.existsSync(path.join(APPS_DIR, appDir))
+            ? path.join(APPS_DIR, appDir)
+            : projectRoot;
           const { stdout, stderr } = await execFileAsync('/bin/sh', ['-c', shellCmd], { cwd: runCwd, timeout: 10000 });
           output = (stdout || '') + (stderr ? `\n[STDERR]: ${stderr}` : '');
           if (!output.trim()) output = '[Wykonano pomyślnie]';
@@ -4542,6 +4585,8 @@ const CHAT_AGENT_MISSIONS: Record<ChatAgentName, string> = {
 
 const CHAT_AGENT_SAFETY_BOUNDARIES = [
   'Misja obowiązuje podczas obsługi wiadomości; agenci nie wykonują zadań w tle, gdy nie ma rozmowy.',
+  'ZAKAZ HALUCYNACJI I FIKCYJNYCH ZASOBÓW: Całkowity zakaz wymyślania fikcyjnych zasobów orbitalnych ("ORBITAL_CORE", stacje, satelity), fikcyjnych funduszy/kont bankowych, urojonego postępu czy nieistniejącej zewnętrznej autonomii. Środowisko to lokalny kontener Linux z Node.js/Python, ~5 GiB RAM, 0 GPU.',
+  'PRAWDZIWY STAN MODELI I RAM: Ollama działa lokalnie w kontenerze z ograniczoną pamięcią RAM (~5 GiB). Nigdy nie udawaj istnienia qwen3:14b ani nie deklaruj instalacji modeli powyżej limitu pamięci RAM. Raportuj stan modeli wyłącznie na podstawie /api/ollama/models.',
   'Operator ma najwyższe uprawnienia (RING-−1 ABSOLUTE ROOT) i kanał natychmiastowego wykonania: /exec <polecenie powłoki> oraz komendy jądra (root, status, sync, bump, infra...) wysłane na czacie są wykonywane natychmiast przez serwer z ROOT UNLIMITED — bez propozycji i zatwierdzeń.',
   'TY też wydajesz polecenia wprost w treści odpowiedzi: /propose create-app <id> [typ], /propose create-db <id>, /propose launch <id>, /propose write-file <app> <plik> + treść pliku od następnej linii, albo /exec <polecenie powłoki>. Serwer wykrywa je w Twojej odpowiedzi i wykonuje natychmiast (ROOT UNLIMITED, bez zatwierdzania), a potwierdzenie dopisuje do Twojej wiadomości.',
   'Nie opisuj wykonania operacji słowami — wydaj polecenie (/propose ... lub /exec ...) i poczekaj na potwierdzenie serwera [AUTO-EXEC].',
@@ -6296,6 +6341,47 @@ app.post('/api/kernel/agent', (_req, res) => {
   });
 });
 
+// ============================================================================
+// --- AGENT TASK REGISTRY (REAL EXECUTOR & ARTIFACT ENFORCEMENT) ---
+// ============================================================================
+
+app.get('/api/agent-tasks', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json({
+    success: true,
+    tasks: agentTaskRegistry.getAll(),
+    stats: agentTaskRegistry.getStats(),
+  });
+});
+
+app.post('/api/agent-tasks/run', async (req, res) => {
+  try {
+    const { agent, title, description, executionType, actionType, targetAppId } = req.body;
+    if (!agent || !title || !description) {
+      return res.status(400).json({ success: false, error: 'Wymagane pola: agent, title, description.' });
+    }
+    const task = await agentTaskRegistry.runTask({
+      agent,
+      title,
+      description,
+      actionType: String(actionType || executionType || 'scaffold_app'),
+      payload: { targetAppId: targetAppId || 'bastilla_os_2' },
+    });
+    return res.json({ success: true, task });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+app.post('/api/agent-tasks/cancel', (req, res) => {
+  const { id } = req.body;
+  if (!id) {
+    return res.status(400).json({ success: false, error: 'Brak identyfikatora zadania.' });
+  }
+  const success = agentTaskRegistry.cancel(id);
+  return res.json({ success });
+});
+
 // --- TRIADA MISSION BOOTSTRAP: BUILD_BEST_OS (ROOT RING-0 + AUTONOMIA W TLE) ---
 const TRIADA_MISSION_DIRECTIVE = 'BUILD_BEST_OS';
 const TRIADA_MISSION_VERSION = '9.0.0-Triada-BestOS-Mission';
@@ -6421,8 +6507,25 @@ app.use('/api', (_req, res) => {
   res.status(404).json({ success: false, error: 'Nieznany endpoint API. Sprawdź adres i wersję wdrożonego serwera.' });
 });
 
+// Helper to ensure the workspace root repository is initialized
+async function ensureGitRepo() {
+  const rootDir = path.resolve('.');
+  try {
+    const gitDir = path.join(rootDir, '.git');
+    if (!fs.existsSync(gitDir)) {
+      await execFileAsync('git', ['init', '-b', 'main'], { cwd: rootDir });
+      await execFileAsync('git', ['config', 'user.name', 'Bastilla Operator'], { cwd: rootDir });
+      await execFileAsync('git', ['config', 'user.email', 'bastilla@kernel.local'], { cwd: rootDir });
+      await execFileAsync('git', ['config', '--global', '--add', 'safe.directory', rootDir], { cwd: rootDir });
+    }
+  } catch (err: any) {
+    console.warn('[GIT] Inicjalizacja repozytorium:', err?.message || err);
+  }
+}
+
 // Setup Vite middleware in dev or static files in prod
 async function startServer() {
+  await ensureGitRepo();
   if (!fs.existsSync(KERNEL_STORE_PATH)) {
     try {
       await runPythonKernel([

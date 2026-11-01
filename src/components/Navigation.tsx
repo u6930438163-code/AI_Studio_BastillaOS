@@ -1,8 +1,9 @@
 import React from 'react';
-import { Terminal, MessagesSquare, FileCode2, Database, History, Activity, Cpu, GitBranch, Clock, Sigma, FolderOpen, HardDrive, LayoutGrid, Brain, Github, Home, ClipboardCheck, Radio, Plug } from 'lucide-react';
+import { Terminal, MessagesSquare, FileCode2, Database, History, Activity, Cpu, GitBranch, Clock, Sigma, FolderOpen, HardDrive, LayoutGrid, Brain, Github, Home, ClipboardCheck, Radio, Plug, Shield } from 'lucide-react';
 
 export type TabId =
   | 'home'
+  | 'bastilla_os_2'
   | 'comms'
   | 'approvals'
   | 'process_matrix'
@@ -22,7 +23,7 @@ export type TabId =
   | 'gpt_actions';
 
 export const TAB_IDS: readonly TabId[] = [
-  'home', 'comms', 'approvals', 'process_matrix', 'astyria_mission', 'schema_graph', 'temporal',
+  'home', 'bastilla_os_2', 'comms', 'approvals', 'process_matrix', 'astyria_mission', 'schema_graph', 'temporal',
   'terminal', 'monolith', 'datastore', 'diagnostics', 'visualizer', 'file_explorer',
   'apps', 'hyper_com', 'without_nlp', 'github', 'gpt_actions',
 ];
@@ -56,6 +57,12 @@ export const Navigation: React.FC<NavigationProps> = ({
       label: 'BastillaOS',
       icon: Home,
       badge: 'SYSTEM'
+    },
+    {
+      id: 'bastilla_os_2' as TabId,
+      label: 'Bastilla OS 2',
+      icon: Shield,
+      badge: 'IVORY & GOLD'
     },
     {
       id: 'comms' as TabId,

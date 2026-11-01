@@ -11,10 +11,17 @@ export function OllamaModelManager() {
   const refresh = async (signal?: AbortSignal) => {
     try {
       const response = await fetch('/api/ollama/models', { cache: 'no-store', signal });
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Serwer proxy zwrócił odpowiedź niebędącą formatem JSON. Ollama jest offline lub nieuruchomiona.');
+      }
       const data = await response.json() as Inventory;
-      if (!response.ok) throw new Error(data.error || 'Nie udało się pobrać modeli.');
       setInventory(data);
-      setError('');
+      if (data.connected === false && data.error) {
+        setError(data.error);
+      } else {
+        setError('');
+      }
     } catch (cause) {
       if (signal?.aborted) return;
       setError(cause instanceof Error ? cause.message : 'Błąd połączenia z Ollama');
@@ -35,8 +42,12 @@ export function OllamaModelManager() {
       </div>
       <p className="text-xs text-slate-400">Model skonfigurowany: <strong className="text-cyan-200">{inventory?.configuredModel ?? 'Sprawdzanie…'}</strong></p>
       {loading && <p role="status" className="text-sm text-slate-400">Łączenie z Ollama…</p>}
-      {error && <p role="alert" className="text-sm text-amber-300">{error}</p>}
-      {!loading && !error && inventory?.models.length === 0 && <p className="text-sm text-slate-400">Brak zainstalowanych modeli.</p>}
+      {error && (
+        <div role="alert" className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-amber-300">
+          {error}
+        </div>
+      )}
+      {!loading && !error && inventory?.connected && inventory?.models.length === 0 && <p className="text-sm text-slate-400">Brak zainstalowanych modeli.</p>}
       <div className="grid gap-2 sm:grid-cols-2">
         {inventory?.models.map(model => (
           <div key={model.name ?? model.model} className="min-w-0 rounded-lg border border-slate-700 bg-slate-900 p-3">

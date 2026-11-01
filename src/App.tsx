@@ -31,6 +31,7 @@ import { AppsStudioView } from './components/AppsStudioView';
 import { WithoutNlpView } from './components/WithoutNlpView';
 import { GitHubExportView } from './components/GitHubExportView';
 import { BastillaDashboard } from './components/BastillaDashboard';
+import { BastillaOS2View } from './components/BastillaOS2View';
 import {
   AstyriaMissionAction,
   AgentProtocolReply,
@@ -520,6 +521,10 @@ export default function App() {
               onSendMessage={handleSendMessage}
               onProvisionGeminiVm={handleProvisionGeminiVm}
             />
+          )}
+
+          {activeTab === 'bastilla_os_2' && (
+            <BastillaOS2View />
           )}
 
           {activeTab === 'comms' && (
