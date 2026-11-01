@@ -86,7 +86,7 @@ jobs:
             cat /tmp/bastilla-mcp-mock.log /tmp/bastilla-mcp-server.log
             exit 1
           fi
-          /tmp/bastilla-mcp-test-venv/bin/python integrations/mcp/smoke_test.py || {
+          BASTILLA_MCP_EXPECT_OFFLINE=1 /tmp/bastilla-mcp-test-venv/bin/python integrations/mcp/smoke_test.py || {
             cat /tmp/bastilla-mcp-server.log
             exit 1
           }
