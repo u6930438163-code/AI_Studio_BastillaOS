@@ -12,6 +12,19 @@ if [[ ! -d node_modules ]]; then
 fi
 # keep-alive.sh uses flock to avoid duplicate servers after Codespaces restarts.
 nohup bash scripts/keep-alive.sh >>"$LOG" 2>&1 </dev/null &
-echo "BastillaOS startup requested. Verify readiness using: curl -f http://127.0.0.1:3000/api/system/metrics. Log: /tmp/svl.log"
+echo "BastillaOS startup requested. Waiting for HTTP readiness on port 3000..."
+ready=0
+for attempt in {1..30}; do
+  if curl -fsS --max-time 2 http://127.0.0.1:3000/api/system/metrics >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
+  sleep 2
+done
+if (( ready == 0 )); then
+  echo "ERROR: BastillaOS did not become HTTP-ready within 60 seconds. Inspect /tmp/svl.log" >&2
+  exit 1
+fi
+echo "BastillaOS HTTP endpoint is responding. Run diagnostics to verify JSON content."
 echo "To provision Debian 13 explicitly: bash scripts/auto-start-vm.sh"
 echo "Run full readiness checks with: bash scripts/check-codespaces.sh"
