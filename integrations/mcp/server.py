@@ -20,7 +20,7 @@ async def request(method: str, path: str, payload=None):
 @mcp.tool()
 async def ollama_status() -> dict:
     """Read live local Ollama connectivity and model status."""
-    return await request("GET", "/api/ai/status")
+    return await request("GET", "/api/ollama/models")
 
 @mcp.tool()
 async def agent_command(agent: str = "triad", command: str = "SYSTEM_STATUS") -> dict:
