@@ -14,6 +14,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/ollama/models":
             self.respond(200, {"connected": False, "models": [], "mock": True})
+        elif self.path == "/api/agents/background/status":
+            self.respond(200, {
+                "monitoring": True,
+                "agents": {
+                    name: {"enabled": True, "status": "offline"}
+                    for name in ("Aria", "Alex", "Astyria", "Aurelius")
+                },
+                "ollama": {"modelCount": 0, "models": []},
+                "mock": True,
+            })
         else:
             self.respond(404, {"error": "not found"})
 
