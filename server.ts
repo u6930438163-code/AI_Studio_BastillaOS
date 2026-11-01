@@ -4340,6 +4340,7 @@ app.get('/api/vm-gemini-4/status', (_req, res) => {
 });
 
 const VM_GEMINI_4_COMPOSE_FILE = path.resolve('bastillaos/vm-gemini-4/compose.yaml');
+const VM_GEMINI_4_KVM_OVERRIDE_FILE = path.resolve('bastillaos/vm-gemini-4/compose.kvm.yaml');
 const VM_GEMINI_4_DATA_DIR = path.resolve('bastillaos/vm-gemini-4/data');
 const VM_GEMINI_4_CONTAINER = 'vm_gemini_4';
 const VM_GEMINI_4_PROJECT = 'svl-vm-gemini-4';
@@ -4440,7 +4441,7 @@ app.post('/api/vm-gemini-4/provision', async (req, res) => {
       error: 'Nieprawidłowe potwierdzenie. Wymagana jest jawna akceptacja utworzenia VM_Gemini_4.',
     });
   }
-  if (!fs.existsSync(VM_GEMINI_4_COMPOSE_FILE) || !fs.existsSync('/dev/kvm')) {
+  if (!fs.existsSync(VM_GEMINI_4_COMPOSE_FILE) || !fs.existsSync(VM_GEMINI_4_KVM_OVERRIDE_FILE) || !fs.existsSync('/dev/kvm')) {
     return res.status(503).json({
       success: false,
       error: 'Brakuje pliku definicji VM albo urządzenia KVM w środowisku.',
@@ -4479,6 +4480,7 @@ app.post('/api/vm-gemini-4/provision', async (req, res) => {
       'compose',
       '--project-name', VM_GEMINI_4_PROJECT,
       '--file', VM_GEMINI_4_COMPOSE_FILE,
+      '--file', VM_GEMINI_4_KVM_OVERRIDE_FILE,
       'up', '--build', '--detach',
     ], {
       cwd: process.cwd(),
