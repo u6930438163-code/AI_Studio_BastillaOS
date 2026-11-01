@@ -5797,12 +5797,14 @@ app.post('/api/triad/message', async (req, res) => {
           }
         }
       }
-      const offlinePrefix = llmProviders.length > 0 ? '[API OFFLINE — without_nlp] ' : '';
-      const includeHeader = target === 'triad' ? agent === 'Astyria' : true;
+      const localCtx = buildSystemContext(store, Array.isArray(store.update_history) ? store.update_history.length : 0);
+      const localAgentName = agent === 'si_1' ? 'si_1' : agent;
+      const localReply = generateLocalReply(localAgentName as any, cleanMessage, localCtx).reply;
+      const offlinePrefix = llmProviders.length > 0 ? '[Lokalna rozmowa · API niedostępne] ' : '';
       return {
         agent,
-        text: offlinePrefix + buildWithoutNlpAgentReply(agent, analysis, cleanMessage, includeHeader),
-        engine: 'without_nlp',
+        text: offlinePrefix + localReply,
+        engine: 'local_nlp',
         llm: false,
         error: undefined as string | undefined,
       };

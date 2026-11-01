@@ -1,6 +1,6 @@
 {
-  "name": "svl-system",
-  "description": "Local SVL system panel with structured agent commands and OpenRouter chat.",
+  "name": "bastillaos",
+  "description": "BastillaOS web interface, SVL kernel, AI agents and local/cloud model integrations.",
   "private": true,
   "version": "0.0.0",
   "type": "module",
