@@ -91,7 +91,7 @@ jobs:
             echo 'HTTP startup test failed' >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          node -e 'const x=require("/tmp/bastilla-metrics.json"); if(typeof x.cpuPercent!=="number") process.exit(1); console.log("Metrics endpoint OK")'
+          node -e 'const x=require("/tmp/bastilla-metrics.json"); if(typeof x.cpuCores!=="number" || x.cpuCores<1 || !(x.cpuPercent===null || typeof x.cpuPercent==="number")) process.exit(1); console.log("Metrics endpoint OK")'
           echo 'HTTP /api/system/metrics: PASS' >> "$GITHUB_STEP_SUMMARY"
           curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3901/api/ai/status > /tmp/bastilla-ai-status.json
           node -e 'const x=require("/tmp/bastilla-ai-status.json"); if(!x || typeof x!=="object" || typeof x.protocol!=="string") process.exit(1); console.log("AI status endpoint OK (does not prove remote AI connectivity)")'
