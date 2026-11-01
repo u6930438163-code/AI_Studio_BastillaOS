@@ -280,26 +280,48 @@ app.get('/api/ollama/models', async (_req, res) => {
   }
 });
 
-// Background agent supervision: lightweight, read-only health checks.
-// No unattended shell commands, repository changes, or paid inference calls.
+// Background supervisor: read-only Ollama health and model inventory checks.
+// No autonomous shell execution, external inference costs or repository writes.
 const backgroundAgents = ['Aria', 'Astyria', 'Alex', 'Aurelius'] as const;
 type BackgroundAgent = typeof backgroundAgents[number];
-const agentBackgroundState: Record<BackgroundAgent, { enabled: boolean; lastCheck: string | null; status: 'waiting' | 'online' | 'offline'; error: string | null }> =
-  Object.fromEntries(backgroundAgents.map(name => [name, { enabled: true, lastCheck: null, status: 'waiting', error: null }])) as any;
+type BackgroundAgentState = {
+  enabled: boolean;
+  lastCheck: string | null;
+  status: 'waiting' | 'online' | 'offline' | 'no-models';
+  error: string | null;
+};
+const agentBackgroundState: Record<BackgroundAgent, BackgroundAgentState> =
+  Object.fromEntries(backgroundAgents.map(name => [name, {
+    enabled: true, lastCheck: null, status: 'waiting', error: null,
+  }])) as Record<BackgroundAgent, BackgroundAgentState>;
 let backgroundAgentCheckRunning = false;
+let backgroundModelCount = 0;
+let backgroundModelNames: string[] = [];
+let backgroundLastDurationMs: number | null = null;
 async function checkBackgroundAgents() {
   if (backgroundAgentCheckRunning) return;
   backgroundAgentCheckRunning = true;
+  const started = Date.now();
   try {
-    const base = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\\/+$/, '');
+    const base = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, '');
     const response = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(4000) });
     if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
+    const result = await response.json() as { models?: { name?: string }[] };
+    backgroundModelNames = Array.isArray(result.models)
+      ? result.models.map(model => model.name).filter((name): name is string => typeof name === 'string')
+      : [];
+    backgroundModelCount = backgroundModelNames.length;
     const now = new Date().toISOString();
     for (const agent of backgroundAgents) {
       if (!agentBackgroundState[agent].enabled) continue;
-      agentBackgroundState[agent] = { enabled: true, lastCheck: now, status: 'online', error: null };
+      agentBackgroundState[agent] = {
+        enabled: true, lastCheck: now,
+        status: backgroundModelCount ? 'online' : 'no-models', error: null,
+      };
     }
   } catch (error) {
+    backgroundModelCount = 0;
+    backgroundModelNames = [];
     const now = new Date().toISOString();
     for (const agent of backgroundAgents) {
       if (!agentBackgroundState[agent].enabled) continue;
@@ -309,6 +331,7 @@ async function checkBackgroundAgents() {
       };
     }
   } finally {
+    backgroundLastDurationMs = Date.now() - started;
     backgroundAgentCheckRunning = false;
   }
 }
@@ -317,8 +340,11 @@ const backgroundAgentTimer = setInterval(() => { void checkBackgroundAgents(); }
 backgroundAgentTimer.unref();
 app.get('/api/agents/background/status', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ monitoring: true, intervalMs: 15000, agents: agentBackgroundState,
-    note: 'Status połączenia Ollama, nie potwierdzenie aktywnej inferencji poszczególnych agentów.' });
+  res.json({
+    monitoring: true, intervalMs: 15000, agents: agentBackgroundState,
+    ollama: { modelCount: backgroundModelCount, models: backgroundModelNames, checkDurationMs: backgroundLastDurationMs },
+    note: 'Wspólny stan Ollama i liczba modeli; nie oznacza uruchomionej inferencji żadnego agenta.',
+  });
 });
 
 const EXPORTS_DIR = path.resolve('exports');
