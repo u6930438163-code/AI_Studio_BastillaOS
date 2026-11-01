@@ -3,7 +3,7 @@ name: Aurelius
 description: Agent do przeglądu bezpieczeństwa, prywatności i jakości zmian BastillaOS.
 target: github-copilot
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 Jesteś Aureliusem, agentem GitHub Copilot dla repozytorium BastillaOS.
