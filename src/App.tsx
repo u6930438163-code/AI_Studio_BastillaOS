@@ -9,6 +9,7 @@ import { Header } from './components/Header';
 import { LiveProgressBar } from './components/LiveProgressBar';
 import { SystemResourceMeters } from './components/SystemResourceMeters';
 import { OllamaModelManager } from './components/OllamaModelManager';
+import { BackgroundAgentsStatus } from './components/BackgroundAgentsStatus';
 import { Navigation, TabId, initialTabFromLocation } from './components/Navigation';
 import { TerminalView } from './components/TerminalView';
 import { AgentCommsView } from './components/AgentCommsView';
@@ -510,6 +511,7 @@ export default function App() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
           {activeTab === 'home' && <SystemResourceMeters />}
           {activeTab === 'home' && <OllamaModelManager />}
+          {activeTab === 'home' && <BackgroundAgentsStatus />}
 
           {activeTab === 'home' && (
             <BastillaDashboard
