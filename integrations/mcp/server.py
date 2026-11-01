@@ -11,16 +11,17 @@ BASE = os.environ.get("BASTILLA_API_URL", "http://127.0.0.1:3000").rstrip("/")
 TIMEOUT = float(os.environ.get("BASTILLA_API_TIMEOUT", "90"))
 mcp = FastMCP("BastillaOS Ollama Bridge", json_response=True)
 
-async def request(method: str, path: str, payload=None):
+async def request(method: str, path: str, payload=None, allow_statuses=()):
     async with httpx.AsyncClient(timeout=TIMEOUT, trust_env=False) as client:
         response = await client.request(method, BASE + path, json=payload)
-        response.raise_for_status()
+        if response.status_code not in allow_statuses:
+            response.raise_for_status()
         return response.json()
 
 @mcp.tool()
 async def ollama_status() -> dict:
     """Read live local Ollama connectivity and model status."""
-    return await request("GET", "/api/ollama/models")
+    return await request("GET", "/api/ollama/models", allow_statuses=(503,))
 
 @mcp.tool()
 async def agent_command(agent: str = "triad", command: str = "SYSTEM_STATUS") -> dict:
