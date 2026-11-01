@@ -23,6 +23,14 @@ async def ollama_status() -> dict:
     return await request("GET", "/api/ollama/models")
 
 @mcp.tool()
+async def agents_status() -> dict:
+    """Read Aria, Alex, Astyria and Aurelius background connectivity diagnostics.
+
+    This endpoint reports Ollama/model monitoring, not proof of active inference.
+    """
+    return await request("GET", "/api/agents/background/status")
+
+@mcp.tool()
 async def agent_command(agent: str = "triad", command: str = "SYSTEM_STATUS") -> dict:
     """Run one predefined read-only diagnostic command for an agent role."""
     if agent not in {"triad", "Alex", "Astyria", "Aurelius"}:
