@@ -1,6 +1,6 @@
-# SVL System
+# BastillaOS
 
-SVL System is a local web application for the SVL kernel. It combines the
+BastillaOS is a web application built around the SVL kernel. It combines the
 Alex, Astyria and Aurelius agent interfaces, deterministic structured commands,
 local Ollama-powered chat, local kernel state, diagnostics and application management.
 
@@ -233,3 +233,9 @@ not deploy to a separate production host; configure and approve that target
 independently. Git push credentials must be configured for the `origin` remote
 (for example with `gh auth login` followed by `gh auth setup-git`); failed
 pushes keep the local commit and are retried automatically.
+
+## Maintenance and deployment verification
+
+The repository's AI Studio sync status confirms synchronization of repository files, not that the application, VM, Ollama, or live terminal has been started. Before deployment run `npm ci`, `npm run lint`, `npm test`, and `npm run build` on a host with Node.js 22+. Run `npm run check:gemini` only when a valid Gemini key and network access are configured. Check `/api/ai/status` against a running Ollama instance. QEMU/KVM requires host virtualization support (typically `/dev/kvm`); Codespaces may not provide it. Never expose VM SSH, application secrets, or an administrative terminal publicly.
+
+The `src`, `apps`, `Nowy_system`, and `bastillaos` directories must be reviewed for imports and runtime dependencies before any deletion. Keep existing interfaces and SVL compatibility identifiers until their callers are migrated and tested. The public repository should be scanned for credentials, including git history, before production use.
