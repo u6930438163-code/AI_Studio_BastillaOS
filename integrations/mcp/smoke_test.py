@@ -11,7 +11,12 @@ async def main():
             await session.initialize()
             tools = await session.list_tools()
             names = {tool.name for tool in tools.tools}
-            expected = {"ollama_status", "agents_status", "vm_status", "agent_command"}
+            expected = {"ollama_status", "agents_status", "vm_status"}
+            allow_commands = os.environ.get("BASTILLA_MCP_READ_ONLY", "1").strip().lower() in {"0", "false", "no"}
+            if allow_commands:
+                expected.add("agent_command")
+            elif "agent_command" in names:
+                raise RuntimeError("Read-only MCP unexpectedly exposes agent_command")
             assert expected <= names, f"Missing MCP tools: {expected - names}"
             result = await session.call_tool("ollama_status", {})
             if result.isError:
@@ -30,23 +35,26 @@ async def main():
             vm_result = await session.call_tool("vm_status", {})
             if vm_result.isError or not vm_result.content:
                 raise RuntimeError("MCP vm_status failed or returned an empty response")
-            agent_result = await session.call_tool(
-                "agent_command", {"agent": "triad", "command": "SYSTEM_STATUS"}
-            )
-            if agent_result.isError:
-                raise RuntimeError("MCP agent_command returned a tool error")
-            if not agent_result.content:
-                raise RuntimeError("MCP agent_command returned an empty response")
-            rejected = await session.call_tool(
-                "agent_command", {"agent": "triad", "command": "EXECUTE_SHELL"}
-            )
-            if not rejected.isError:
-                raise RuntimeError("MCP accepted an unsupported agent command")
-            rejected_agent = await session.call_tool(
-                "agent_command", {"agent": "unauthorized-agent", "command": "SYSTEM_STATUS"}
-            )
-            if not rejected_agent.isError:
-                raise RuntimeError("MCP accepted an unsupported agent role")
+            agent_result = "disabled (read-only mode)"
+            if allow_commands:
+                agent_result = await session.call_tool(
+                    "agent_command", {"agent": "triad", "command": "SYSTEM_STATUS"}
+                )
+                if agent_result.isError:
+                    raise RuntimeError("MCP agent_command returned a tool error")
+                if not agent_result.content:
+                    raise RuntimeError("MCP agent_command returned an empty response")
+                rejected = await session.call_tool(
+                    "agent_command", {"agent": "triad", "command": "EXECUTE_SHELL"}
+                )
+                if not rejected.isError:
+                    raise RuntimeError("MCP accepted an unsupported agent command")
+                rejected_agent = await session.call_tool(
+                    "agent_command", {"agent": "unauthorized-agent", "command": "SYSTEM_STATUS"}
+                )
+                if not rejected_agent.isError:
+                    raise RuntimeError("MCP accepted an unsupported agent role")
+    
             print("MCP handshake, diagnostics, command and agent allowlists: OK")
             print("Tools:", ", ".join(sorted(names)))
             print("Ollama diagnostic:", result)
