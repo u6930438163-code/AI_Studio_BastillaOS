@@ -1,0 +1,36 @@
+name: BastillaOS MCP container validation
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/mcp/**'
+      - '.github/workflows/bastilla-mcp-container.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-mcp-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build MCP container
+        run: docker build -f integrations/mcp/Dockerfile.cloudrun -t bastilla-mcp:test .
+      - name: Verify MCP HTTP initialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name bastilla-mcp-test -p 127.0.0.1:18080:8080 -e BASTILLA_API_URL=http://127.0.0.1:3902 bastilla-mcp:test
+          trap 'docker logs bastilla-mcp-test || true; docker rm -f bastilla-mcp-test || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /tmp/mcp-response.json --max-time 2 \
+              -H 'Content-Type: application/json' \
+              -H 'Accept: application/json, text/event-stream' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"github-ci","version":"1.0"}}}' \
+              http://127.0.0.1:18080/mcp/; then
+              python3 -c 'import json; r=json.load(open("/tmp/mcp-response.json")); assert r["result"]["serverInfo"]["name"]; print("MCP initialization: PASS")'
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
