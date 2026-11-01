@@ -18,6 +18,7 @@ on:
       - 'scripts/auto-start-vm.sh'
       - 'scripts/keep-alive.sh'
       - 'integrations/mcp/**'
+      - 'packaging/bastilla-connect/**'
   pull_request:
     paths:
       - 'bastillaos/vm-gemini-4/**'
@@ -67,6 +68,15 @@ jobs:
         run: |
           bash -n packaging/bastilla-connect/build-deb.sh packaging/bastilla-connect/bastilla-connect
           python3 -m unittest discover -s tests -p 'test_bastilla_connect.py' -v
+          bash packaging/bastilla-connect/build-deb.sh
+          dpkg-deb --info dist/bastilla-connect_*.deb
+          dpkg-deb --contents dist/bastilla-connect_*.deb | grep '/usr/bin/bastilla-connect'
+      - name: Upload BastillaOS Connect Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bastilla-connect-debian-package
+          path: dist/bastilla-connect_*.deb
+          if-no-files-found: error
       - name: MCP protocol integration smoke test (mock backend)
         shell: bash
         run: |
