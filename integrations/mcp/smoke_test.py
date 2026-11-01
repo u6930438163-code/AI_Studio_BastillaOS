@@ -29,7 +29,12 @@ async def main():
             )
             if not rejected.isError:
                 raise RuntimeError("MCP accepted an unsupported agent command")
-            print("MCP handshake, diagnostics and command allowlist: OK")
+            rejected_agent = await session.call_tool(
+                "agent_command", {"agent": "unauthorized-agent", "command": "SYSTEM_STATUS"}
+            )
+            if not rejected_agent.isError:
+                raise RuntimeError("MCP accepted an unsupported agent role")
+            print("MCP handshake, diagnostics, command and agent allowlists: OK")
             print("Tools:", ", ".join(sorted(names)))
             print("Ollama diagnostic:", result)
             print("Agent diagnostic:", agent_result)
