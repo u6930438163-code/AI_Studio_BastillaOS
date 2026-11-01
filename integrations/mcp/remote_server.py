@@ -17,8 +17,8 @@ if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.
 mcp = FastMCP("BastillaOS Remote API Bridge", host="127.0.0.1", port=8001, json_response=True)
 
 async def post(path: str, payload: dict) -> dict:
-    if not ALLOW_WRITES:
-        return {"error": "Remote writes disabled. Set BASTILLA_REMOTE_MCP_WRITES=1 after securing access."}
+    if not ALLOW_WRITES or not TOKEN:
+        return {"error": "Remote writes require BASTILLA_REMOTE_MCP_WRITES=1 and BASTILLA_REMOTE_API_TOKEN."}
     headers = {"Authorization": f"Bearer {TOKEN}"} if TOKEN else {}
     async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
         response = await client.post(BASE + path, json=payload, headers=headers)
