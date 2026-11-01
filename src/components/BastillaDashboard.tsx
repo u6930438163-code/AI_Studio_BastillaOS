@@ -214,117 +214,19 @@ export const BastillaDashboard: React.FC<BastillaDashboardProps> = ({
     }
   };
 
-  const recentMessages = dataStore.chat_history.slice(-5);
+  const recentMessages = dataStore.chat_history;
 
   return (
-    <section className="cyber-grid flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[#050b18] p-3 text-slate-100 sm:p-5 lg:p-7">
-      <div className="mx-auto w-full max-w-[1500px] space-y-4">
-        <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-400/20 bg-[#081326]/90 px-4 py-3 shadow-[0_12px_42px_rgba(2,8,23,0.6)] backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl border border-cyan-300/30 bg-blue-950 text-cyan-200 shadow-[0_0_24px_rgba(34,211,238,0.16)]">
-              <Orbit className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-sm font-extrabold tracking-[0.16em] text-white">BASTILLA<span className="text-cyan-300">OS</span></div>
-              <div className="text-[10px] font-mono tracking-wider text-blue-200/60">DEBIAN 13 · SVL HYPERSPACE DESKTOP</div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-950/40 px-2.5 py-1 text-emerald-300">
-              <Radio className="h-3 w-3" /> JĄDRO {status.systemVersion}
-            </span>
-            <span className="rounded-full border border-blue-300/20 bg-blue-950/40 px-2.5 py-1 text-blue-200/80">
-              {status.appCount === null ? 'APLIKACJE: —' : `${status.appCount} MODUŁÓW`}
-            </span>
-            <span className="rounded-full border border-blue-300/20 bg-blue-950/40 px-2.5 py-1 text-blue-200/80">
-              {status.continuousMission === null ? 'MISJA: —' : status.continuousMission ? 'MISJA: AKTYWNA' : 'MISJA: WSTRZYMANA'}
-            </span>
-            <span className="rounded-full border border-cyan-300/20 bg-cyan-950/40 px-2.5 py-1 text-cyan-200">
-              PROTOKÓŁ TRIADY · DETERMINISTYCZNY
-            </span>
-          </div>
+    <section className="cyber-grid flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#050b18] p-2 text-slate-100 sm:p-3">
+      <div className="flex h-full min-h-0 w-full flex-col gap-2">
+        <header className="flex shrink-0 items-center justify-between gap-2 rounded-xl border border-cyan-400/20 bg-[#081326] px-3 py-2">
+          <span className="flex items-center gap-2 text-xs font-bold text-cyan-100"><MessagesSquare className="h-4 w-4" /> BASTILLAOS · CZAT</span>
+          <button type="button" onClick={() => onNavigate('terminal')} className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/30 bg-cyan-950/50 px-3 py-2 text-xs font-bold text-cyan-100">
+            <Terminal className="h-4 w-4" /> Pełny terminal
+          </button>
         </header>
-
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.75fr)]">
-          <section className="relative overflow-hidden rounded-2xl border border-blue-400/20 bg-gradient-to-br from-[#0c1b36] via-[#081326] to-[#07101e] p-5 sm:p-7">
-            <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />
-            <div aria-hidden="true" className="pointer-events-none absolute bottom-0 right-1/3 h-px w-2/3 bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent" />
-            <div className="relative">
-              <div className="mb-3 flex items-center gap-2 text-[10px] font-mono font-bold tracking-[0.25em] text-cyan-300">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300" />
-                SYSTEM ONLINE · DEBIAN GNU/LINUX
-              </div>
-              <h1 className="text-3xl font-black tracking-tight text-white sm:text-5xl">
-                Enter the <span className="text-transparent bg-gradient-to-r from-blue-300 to-cyan-200 bg-clip-text">Hyperspace</span>
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-blue-100/65">
-                Jeden pulpit dla poleceń jądra, protokołu Triady i narzędzi systemowych. Wybierz moduł albo wykonaj jawne polecenie w terminalu.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button type="button" onClick={() => onNavigate('terminal')} className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/30 bg-cyan-950/50 px-3.5 py-2 text-xs font-bold text-cyan-100 transition hover:border-cyan-200/60 hover:bg-cyan-900/50">
-                  <Terminal className="h-4 w-4" /> Pełny terminal <ArrowUpRight className="h-3.5 w-3.5" />
-                </button>
-                <button type="button" onClick={() => onNavigate('comms')} className="inline-flex items-center gap-2 rounded-lg border border-blue-200/15 bg-blue-950/40 px-3.5 py-2 text-xs font-bold text-blue-100 transition hover:border-blue-200/40 hover:bg-blue-900/40">
-                  <MessagesSquare className="h-4 w-4" /> Otwórz protokół Triady <ArrowUpRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section className="flex flex-col justify-between gap-4 rounded-2xl border border-blue-300/15 bg-[#081326]/90 p-5">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-100">
-                <Sparkles className="h-4 w-4 text-cyan-300" /> Polecenia Triady
-              </div>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                Rozmawiaj swobodnie z wybranym agentem lub całą Triadą. Odpowiada Gemini, przy awarii xAI (Grok), a bez dostępu do API — lokalny silnik without_nlp.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onNavigate('comms')}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-gradient-to-r from-blue-700/80 to-cyan-700/70 px-4 py-3 text-xs font-bold text-white transition hover:brightness-110"
-            >
-              <MessagesSquare className="h-4 w-4" />
-              Otwórz polecenia protokołu
-            </button>
-            <div className="rounded-xl border border-cyan-300/15 bg-cyan-950/20 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold text-cyan-100">
-                  {status.geminiVm?.name ?? 'VM_Gemini_4'}
-                </span>
-                <span className={`rounded-full border px-2 py-0.5 text-[9px] font-mono ${
-                  status.geminiVm?.configured && status.geminiVm.modelNameValid
-                    ? 'border-emerald-400/20 bg-emerald-950/40 text-emerald-300'
-                    : 'border-amber-400/20 bg-amber-950/40 text-amber-200'
-                }`}>
-                  {status.geminiVm?.configured && status.geminiVm.modelNameValid
-                    ? 'KONFIGURACJA GOTOWA'
-                    : 'BRAK KONFIGURACJI'}
-                </span>
-              </div>
-              <p className="mt-1 text-[10px] text-slate-400">
-                {status.geminiVm
-                  ? `${status.geminiVm.provider} · główny: ${status.geminiVm.primaryModel} · rezerwowy: ${status.geminiVm.fallbackModels.join(', ') || 'brak'}`
-                  : 'Odczyt konfiguracji…'}
-              </p>
-              <p className="mt-1 text-[9px] text-slate-500">
-                {status.geminiVm?.runtimeType === 'remote-model-profile'
-                  ? 'Profil API modelu; nie jest osobną maszyną systemową.'
-                  : 'Status API modelu nie został jeszcze pobrany.'}
-              </p>
-            </div>
-          </section>
-        </div>
-
-        {status.error && (
-          <p role="status" className="rounded-xl border border-amber-400/20 bg-amber-950/20 px-4 py-2 text-xs text-amber-100">
-            Nie udało się odświeżyć telemetrii ({status.error}). Pozostałe funkcje są dostępne.
-          </p>
-        )}
-
-        <div className="grid min-h-[460px] gap-4">
-          <section className="flex min-h-[420px] min-w-0 flex-col overflow-hidden rounded-2xl border border-blue-300/20 bg-[#081326]/95 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+        <div className="grid min-h-0 flex-1 gap-2">
+          <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-blue-300/20 bg-[#081326]/95 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
             <div className="flex items-center justify-between border-b border-blue-200/10 px-4 py-3">
               <div className="flex items-center gap-2 text-xs font-bold text-blue-50">
                 <MessagesSquare className="h-4 w-4 text-cyan-300" /> CZAT AGENTÓW
@@ -452,35 +354,7 @@ export const BastillaDashboard: React.FC<BastillaDashboardProps> = ({
           </section>
         </div>
 
-        <section className="pb-2">
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-blue-50">
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" /> Moduły systemowe
-              </h2>
-              <p className="mt-1 text-[11px] text-slate-500">Narzędzia SVL dostępne w tym środowisku</p>
-            </div>
-            <span className="font-mono text-[9px] text-blue-200/45">BASTILLAOS · DEBIAN LIVE</span>
-          </div>
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-            {featureLaunchers.map(({ id, title, description, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onNavigate(id)}
-                className="group flex min-h-20 items-start gap-3 rounded-xl border border-blue-200/10 bg-[#081326]/80 p-3 text-left transition hover:border-cyan-300/30 hover:bg-[#0b1b34]"
-              >
-                <span className="rounded-lg border border-blue-200/10 bg-blue-950/60 p-2 text-cyan-200 transition group-hover:border-cyan-300/30">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span>
-                  <span className="block text-[11px] font-bold text-slate-100">{title}</span>
-                  <span className="mt-1 block text-[10px] leading-relaxed text-slate-500">{description}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
+
       </div>
     </section>
   );
