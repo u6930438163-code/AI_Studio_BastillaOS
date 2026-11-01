@@ -56,6 +56,29 @@ jobs:
           BASTILLA_REMOTE_MCP_URL=http://127.0.0.1:8000/mcp bastilla-connect mcp --call ollama_status
           BASTILLA_REMOTE_MCP_URL=http://127.0.0.1:8000/mcp bastilla-connect mcp --call vm_status
           echo 'Installed .deb MCP client handshake: PASS (local mock, not cloud)' >> "$GITHUB_STEP_SUMMARY"
+      - name: Public deployment DNS and HTTPS diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -u
+          for base in \
+            "https://ais-dev-wcohfbaczr2ohtvwiuxtdt-873947482948.europe-west2.run.app" \
+            "https://ais-pre-wcohfbaczr2ohtvwiuxtdt-873947482948.europe-west2.run.app"; do
+            host="${base#https://}"
+            echo "### Deployment: $host" >> "$GITHUB_STEP_SUMMARY"
+            if ! getent ahosts "$host" >/dev/null; then
+              echo 'DNS: FAILED (hostname unresolved from GitHub runner)' >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            echo 'DNS: resolved' >> "$GITHUB_STEP_SUMMARY"
+            code="$(curl --silent --show-error --max-time 12 --output /dev/null --write-out '%{http_code}' "$base/api/ai/status" || true)"
+            echo "HTTPS /api/ai/status: HTTP $code" >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$code" != 200 ]]; then
+              echo 'Remote API not confirmed; check Cloud Run deployment and authorization.' >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo 'Remote endpoint responded HTTP 200; JSON schema and agent/MCP connectivity not verified.' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
       - name: Upload installable Debian package
         uses: actions/upload-artifact@v4
         with:
