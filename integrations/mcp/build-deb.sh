@@ -11,7 +11,11 @@ cp "$ROOT/integrations/mcp/client.py" "$PKG/usr/lib/bastilla-connect/client.py"
 cat > "$PKG/usr/bin/bastilla-connect" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-exec /usr/bin/python3 /usr/lib/bastilla-connect/client.py "$@"
+if [[ ! -x /opt/bastilla-connect/venv/bin/python ]]; then
+  echo "Missing Python MCP dependencies; see integrations/mcp/CONNECT.md" >&2
+  exit 2
+fi
+exec /opt/bastilla-connect/venv/bin/python /usr/lib/bastilla-connect/client.py "$@"
 EOF
 chmod 755 "$PKG/usr/bin/bastilla-connect"
 cat > "$PKG/DEBIAN/control" <<EOF
