@@ -9,6 +9,7 @@
     "start": "tsx server.ts",
     "maintenance": "node scripts/maintenance.mjs",
     "check:gemini": "node scripts/check-gemini.mjs",
+    "check:api": "node scripts/check-bastilla-api.mjs",
     "setup:ollama": "bash scripts/setup-ollama.sh",
     "setup:codex": "bash scripts/setup-codex.sh",
     "codex": "bash scripts/run-codex.sh",
