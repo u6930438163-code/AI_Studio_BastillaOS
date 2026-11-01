@@ -132,6 +132,8 @@ jobs:
           fi
           node -e 'const x=require("/tmp/bastilla-metrics.json"); if(typeof x.cpuCores!=="number" || x.cpuCores<1 || !(x.cpuPercent===null || typeof x.cpuPercent==="number")) process.exit(1); console.log("Metrics endpoint OK")'
           echo 'HTTP /api/system/metrics: PASS' >> "$GITHUB_STEP_SUMMARY"
+          BASTILLA_PUBLIC_API_URL=http://127.0.0.1:3901 npm run check:api
+          echo 'Local API connectivity diagnostics: PASS (not a public deployment check)' >> "$GITHUB_STEP_SUMMARY"
           curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3901/api/ai/status > /tmp/bastilla-ai-status.json
           node -e 'const x=require("/tmp/bastilla-ai-status.json"); if(!x || typeof x!=="object" || typeof x.protocol!=="string") process.exit(1); console.log("AI status endpoint OK (does not prove remote AI connectivity)")'
           echo 'HTTP /api/ai/status: PASS (local status API only)' >> "$GITHUB_STEP_SUMMARY"
