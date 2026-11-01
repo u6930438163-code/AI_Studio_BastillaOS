@@ -63,6 +63,10 @@ jobs:
               ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
               print('PASS Python syntax:', path)
           PY
+      - name: BastillaOS Connect Debian packaging checks
+        run: |
+          bash -n packaging/bastilla-connect/build-deb.sh packaging/bastilla-connect/bastilla-connect
+          python3 -m unittest discover -s tests -p 'test_bastilla_connect.py' -v
       - name: MCP protocol integration smoke test (mock backend)
         shell: bash
         run: |
