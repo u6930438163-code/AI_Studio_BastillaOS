@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, MessagesSquare, FileCode2, Database, History, Activity, Cpu, GitBranch, Clock, Sigma, FolderOpen, HardDrive, LayoutGrid, Brain, Github, Home, ClipboardCheck, Radio, Plug, Shield } from 'lucide-react';
+import { Terminal, MessagesSquare, FileCode2, Database, History, Activity, Cpu, GitBranch, Clock, Sigma, FolderOpen, HardDrive, LayoutGrid, Brain, Github, Home, ClipboardCheck, Radio, Plug, Shield, Images, Blocks, ChartNoAxesCombined } from 'lucide-react';
 
 export type TabId =
   | 'home'
@@ -20,12 +20,15 @@ export type TabId =
   | 'hyper_com'
   | 'without_nlp'
   | 'github'
-  | 'gpt_actions';
+  | 'gpt_actions'
+  | 'cloud_library'
+  | 'integrations'
+  | 'project_progress';
 
 export const TAB_IDS: readonly TabId[] = [
   'home', 'bastilla_os_2', 'comms', 'approvals', 'process_matrix', 'astyria_mission', 'schema_graph', 'temporal',
   'terminal', 'monolith', 'datastore', 'diagnostics', 'visualizer', 'file_explorer',
-  'apps', 'hyper_com', 'without_nlp', 'github', 'gpt_actions',
+  'apps', 'hyper_com', 'without_nlp', 'github', 'gpt_actions', 'cloud_library', 'integrations', 'project_progress',
 ];
 
 /** Widok startowy z adresu, np. /?view=without_nlp (launchery KDE w BastillaOS). */
@@ -160,6 +163,14 @@ export const Navigation: React.FC<NavigationProps> = ({
       icon: Plug,
       badge: 'API'
     },
+    { id: 'integrations' as TabId, label: 'Integracje', icon: Blocks, badge: 'USŁUGI' },
+    { id: 'cloud_library' as TabId, label: 'Zdjęcia i notatki', icon: Images, badge: 'IMPORT' },
+    {
+      id: 'project_progress' as TabId,
+      label: 'Bastilla OS 2 · Postęp',
+      icon: ChartNoAxesCombined,
+      badge: 'GITHUB'
+    },
     {
       id: 'github' as TabId,
       label: 'Eksport GitHub',
@@ -167,7 +178,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       badge: 'GIT'
     }
   ];
-  const mobileLabels: Partial<Record<TabId, string>> = { home: 'Pulpit', comms: 'Czat', terminal: 'Terminal', apps: 'Aplikacje' };
+  const mobileLabels: Partial<Record<TabId, string>> = { home: 'Pulpit', comms: 'Czat', terminal: 'Terminal', apps: 'Aplikacje', integrations: 'Integracje' };
 
   return (
     <nav aria-label="Nawigacja BastillaOS" className="app-navigation order-last flex w-full shrink-0 flex-row border-t border-blue-200/10 bg-[#07101e] lg:order-first lg:h-auto lg:w-60 lg:flex-col lg:border-r lg:border-t-0">
@@ -186,7 +197,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               aria-label={tab.label}
               aria-current={isActive ? 'page' : undefined}
               onClick={() => onSelectTab(tab.id)}
-              className={`group relative min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center transition-all duration-200 lg:min-h-11 lg:w-full lg:flex-none lg:flex-row lg:justify-start lg:gap-3 lg:px-3 lg:text-left ${['home', 'comms', 'terminal', 'apps'].includes(tab.id) ? 'flex' : 'hidden lg:flex'} ${
+              className={`group relative min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center transition-all duration-200 lg:min-h-11 lg:w-full lg:flex-none lg:flex-row lg:justify-start lg:gap-3 lg:px-3 lg:text-left ${['home', 'comms', 'terminal', 'apps', 'integrations'].includes(tab.id) ? 'flex' : 'hidden lg:flex'} ${
                 isActive
                   ? 'border border-cyan-300/15 bg-cyan-950/50 text-cyan-100 shadow-[inset_2px_0_0_#67e8f9,0_4px_18px_rgba(8,145,178,0.08)]'
                   : 'border border-transparent text-slate-400 hover:bg-blue-950/50 hover:text-blue-100'
