@@ -1,5 +1,6 @@
 """Verify MCP handshake and tool execution; model availability is a separate check."""
 import asyncio
+import json
 import os
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
@@ -17,6 +18,12 @@ async def main():
                 raise RuntimeError("MCP ollama_status returned a tool error")
             if not result.content:
                 raise RuntimeError("MCP ollama_status returned an empty response")
+            if os.environ.get("BASTILLA_MCP_EXPECT_OFFLINE") == "1":
+                diagnostic = getattr(result, "structuredContent", None)
+                if not isinstance(diagnostic, dict):
+                    diagnostic = json.loads(result.content[0].text)
+                if diagnostic.get("connected") is not False:
+                    raise RuntimeError("Expected Ollama offline diagnostic, got a different state")
             agents_result = await session.call_tool("agents_status", {})
             if agents_result.isError or not agents_result.content:
                 raise RuntimeError("MCP agents_status failed or returned an empty response")
