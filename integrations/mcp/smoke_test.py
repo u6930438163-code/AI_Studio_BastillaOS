@@ -12,7 +12,11 @@ async def main():
             expected = {"ollama_status", "agent_command"}
             assert expected <= names, f"Missing MCP tools: {expected - names}"
             result = await session.call_tool("ollama_status", {})
-            print("MCP handshake: OK")
+            if result.isError:
+                raise RuntimeError("MCP ollama_status returned a tool error")
+            if not result.content:
+                raise RuntimeError("MCP ollama_status returned an empty response")
+            print("MCP handshake and Ollama diagnostic tool call: OK")
             print("Tools:", ", ".join(sorted(names)))
             print("Ollama diagnostic:", result)
 
