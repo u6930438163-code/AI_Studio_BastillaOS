@@ -156,10 +156,10 @@ const KERNEL_STORE_PATH = path.resolve(process.env.SVL_KERNEL_STORE_PATH || '.sv
 // Configurable request size for binary attachments encoded as base64 in JSON.
 // Keep a finite bound to prevent accidental out-of-memory crashes or denial of service.
 // Default 1024 MiB of JSON payload; reverse proxies may impose their own limits.
-const requestedUploadLimit = Number(process.env.BASTILLA_UPLOAD_MAX_MB || 1024);
+const requestedUploadLimit = Number(process.env.BASTILLA_UPLOAD_MAX_MB || 32);
 const uploadLimitMB = Number.isFinite(requestedUploadLimit)
-  ? Math.max(1, Math.min(1024, Math.floor(requestedUploadLimit)))
-  : 1024;
+  ? Math.max(1, Math.min(256, Math.floor(requestedUploadLimit)))
+  : 32;
 app.use(express.json({ limit: `${uploadLimitMB}mb` }));
 app.use(express.urlencoded({ limit: `${uploadLimitMB}mb`, extended: true }));
 
@@ -3329,7 +3329,7 @@ async function startAutoGitSync(): Promise<void> {
   } catch (error: any) {
     if (!String(error?.message || error).includes('upstream')) {
       pushSystemLog('warn', 'KERNEL', `[GITHUB AUTO] Nie można zainicjować obserwacji zmian: ${error?.message || error}`);
-      return;
+      // Brak połączenia lub upstream nie może wyłączać monitoringu lokalnych zmian.
     }
   }
   autoGitSyncEnabled = true;
@@ -5925,8 +5925,8 @@ async function startServer() {
   }
 
   // Podłączenie Triady, nadanie ROOT RING-0 i aktywacja misji BUILD_BEST_OS (idempotentne).
-  await bootstrapTriadMission();
-  await startAutoGitSync();
+  try { await bootstrapTriadMission(); } catch (error) { console.error('[BOOT] Agent bootstrap failed:', error); }
+  try { await startAutoGitSync(); } catch (error) { console.error('[BOOT] Git sync initialization failed:', error); }
 
   if (process.env.NODE_ENV === 'production') {
     app.use(express.static('dist'));
@@ -5961,7 +5961,8 @@ async function startServer() {
         const maxPort = PORT + 20;
         if (nextPort <= maxPort) {
           console.warn(`[SVL-KERNEL] Port ${port} is busy; retrying on ${nextPort}.`);
-          bindServer(nextPort);
+          console.error('[SVL-KERNEL] Port fallback disabled to keep Codespaces forwarding stable.');
+          process.exitCode = 1;
           return;
         }
         console.error(`[SVL-KERNEL] Ports ${PORT}-${maxPort} are unavailable. Aborting startup.`);
