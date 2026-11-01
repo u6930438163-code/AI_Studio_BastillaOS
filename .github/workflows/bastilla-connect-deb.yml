@@ -35,6 +35,27 @@ jobs:
           systemctl cat bastilla-connect.service bastilla-connect.timer
           echo '### BastillaOS Connect' >> "$GITHUB_STEP_SUMMARY"
           echo 'Package installed and local smoke test passed. Remote MCP connectivity was not tested.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Installed MCP client to local mock server handshake
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 integrations/mcp/mock_api.py >/tmp/bastilla-connect-mock.log 2>&1 &
+          mock_pid=$!
+          BASTILLA_API_URL=http://127.0.0.1:3902 /usr/bin/python3 -c 'import sys, runpy; sys.path.insert(0, "/opt/bastilla-connect/vendor"); runpy.run_path("integrations/mcp/server.py", run_name="__main__")' >/tmp/bastilla-connect-server.log 2>&1 &
+          mcp_pid=$!
+          trap 'kill "$mcp_pid" "$mock_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 30); do
+            if (echo >/dev/tcp/127.0.0.1/8000) >/dev/null 2>&1; then ready=1; break; fi
+            sleep 1
+          done
+          if [[ "$ready" != 1 ]]; then
+            cat /tmp/bastilla-connect-mock.log /tmp/bastilla-connect-server.log
+            exit 1
+          fi
+          BASTILLA_REMOTE_MCP_URL=http://127.0.0.1:8000/mcp bastilla-connect mcp --call ollama_status
+          BASTILLA_REMOTE_MCP_URL=http://127.0.0.1:8000/mcp bastilla-connect mcp --call vm_status
+          echo 'Installed .deb MCP client handshake: PASS (local mock, not cloud)' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload installable Debian package
         uses: actions/upload-artifact@v4
         with:
