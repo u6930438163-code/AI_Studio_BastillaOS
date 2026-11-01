@@ -148,7 +148,8 @@ const POLLINATIONS_API_KEY = rawEnvPollKey.startsWith('sk_')
   ? rawEnvPollKey
   : '';
 const app = express();
-const DEFAULT_PORT = Number(process.env.PORT || 3000);
+const portArgIndex = process.argv.indexOf('--port');
+const DEFAULT_PORT = Number(portArgIndex >= 0 ? process.argv[portArgIndex + 1] : process.env.PORT || 3000);
 const PORT = Number.isFinite(DEFAULT_PORT) && DEFAULT_PORT > 0 ? DEFAULT_PORT : 3000;
 let activeServerPort = PORT;
 const PYTHON_SCRIPT_PATH = path.resolve('svl_kernel.py');
@@ -6348,6 +6349,11 @@ async function bootstrapTriadMission() {
   }
 }
 
+// Unknown API requests must not fall through to the HTML application shell.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ success: false, error: 'Nieznany endpoint API. Sprawdź adres i wersję wdrożonego serwera.' });
+});
+
 // Setup Vite middleware in dev or static files in prod
 async function startServer() {
   if (!fs.existsSync(KERNEL_STORE_PATH)) {
@@ -6420,3 +6426,4 @@ async function startServer() {
 startServer().catch((err) => {
   console.error('[SVL-KERNEL] Failed to start server:', err);
 });
+

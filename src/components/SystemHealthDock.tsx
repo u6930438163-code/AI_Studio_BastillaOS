@@ -25,14 +25,14 @@ export const SystemHealthDock: React.FC = () => {
   }, []);
 
   return (
-    <div className={`fixed bottom-4 right-4 z-50 transition-all ${isExpanded ? 'w-64' : 'w-auto'}`}>
+    <div className={`health-dock fixed right-3 z-30 transition-all ${isExpanded ? 'w-64 max-w-[calc(100vw-1.5rem)]' : 'w-auto'}`}>
       <div className="bg-slate-900 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
         <div className="flex items-center justify-between p-2 bg-slate-800">
           <div className="flex items-center gap-2">
             <ShieldCheck className={`w-4 h-4 ${status.system === 'NOMINALNY' ? 'text-emerald-400' : 'text-amber-400'}`} />
             {isExpanded && <span className="text-xs font-bold text-slate-200">System SVL Health</span>}
           </div>
-          <button onClick={() => setIsExpanded(!isExpanded)} className="text-slate-400 cursor-pointer">
+          <button aria-label="Stan systemu" aria-expanded={isExpanded} onClick={() => setIsExpanded(!isExpanded)} className="flex min-h-8 min-w-8 items-center justify-center text-slate-400 cursor-pointer">
             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
           </button>
         </div>
@@ -53,3 +53,4 @@ export const SystemHealthDock: React.FC = () => {
     </div>
   );
 };
+

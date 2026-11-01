@@ -33,6 +33,19 @@ test('OpenAPI uses configured HTTPS origin and supported agent operations', asyn
   assert.deepEqual(Object.keys(r.body.paths).sort(), ['/api/gpt-actions/message', '/api/gpt-actions/status']);
   assert.ok(r.body.security[0].bearerAuth);
   for (const origin of ['http://host', 'https://user:pass@host', 'https://host/path', 'https://host/?token=secret']) assert.throws(() => gptActionsSchema(origin));
+  assert.throws(() => gptActionsSchema('https://ais-dev-example-123.europe-west2.run.app'));
+});
+test('setup diagnoses missing settings without disclosing the token or claiming a live connection', async () => {
+  const h = harness();
+  const r = await h.request('get', 'setup');
+  assert.equal(r.body.readyForExternalTest, true);
+  assert.equal(r.body.externalConnectionVerified, false);
+  assert.ok(!JSON.stringify(r.body).includes(token));
+  const missing = await harness({ env: {}, providers: () => [] }).request('get', 'setup');
+  assert.equal(missing.body.readyForExternalTest, false);
+  assert.equal(missing.body.tokenConfigured, false);
+  assert.equal(missing.body.publicUrlConfigured, false);
+  assert.equal(missing.body.schemaUrl, null);
 });
 test('disabled by default; missing or invalid token never calls a model', async () => {
   const disabled = harness({ env: {} });
@@ -90,3 +103,4 @@ test('response is bounded; concurrent overload is rejected', async () => {
   for (const resolve of resolvers) resolve({ text: 'OK', provider: 'ollama', model: 'local' });
   await Promise.all([first, second]);
 });
+

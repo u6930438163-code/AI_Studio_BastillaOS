@@ -62,6 +62,7 @@ export const AgentCommsView: React.FC<AgentCommsViewProps> = ({
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [mobileSection, setMobileSection] = useState<'chat' | 'agents'>('chat');
+  const [showProtocolTools, setShowProtocolTools] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const followLatestMessagesRef = useRef(true);
   const transmissionStatus = sendError
@@ -174,14 +175,14 @@ export const AgentCommsView: React.FC<AgentCommsViewProps> = ({
       <div className={`${mobileSection === 'chat' ? 'flex' : 'hidden'} min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-slate-800/80 bg-slate-950/70 backdrop-blur-md lg:flex`}>
         {/* Futuristic Channel Bar */}
         <div className="bg-slate-900/80 backdrop-blur-md border-b border-cyan-500/20 px-2 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 shadow-sm shrink-0">
-          <div className="flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
+          <div className="flex min-w-0 max-w-full items-center gap-1.5 sm:gap-2.5 flex-wrap">
             <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] shrink-0">WĘZEŁ:</span>
             <select
               aria-label="Cel transmisji"
               value={selectedTarget}
               onChange={(event) => setSelectedTarget(event.target.value as typeof selectedTarget)}
               disabled={isLoading}
-              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold text-slate-200 outline-none transition focus:border-cyan-500 disabled:opacity-50"
+              className="min-w-0 max-w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold text-slate-200 outline-none transition focus:border-cyan-500 disabled:opacity-50"
             >
               <option value="triad">Triada · Alex, Astyria, Aria, Aurelius</option>
               <option value="Alex">Alex</option>
@@ -239,6 +240,8 @@ export const AgentCommsView: React.FC<AgentCommsViewProps> = ({
           </div>
         </div>
 
+        <button type="button" aria-expanded={showProtocolTools} onClick={() => setShowProtocolTools(!showProtocolTools)} className="shrink-0 border-b border-slate-800 px-3 py-2 text-left text-cyan-200 lg:hidden">{showProtocolTools ? 'Ukryj narzędzia protokołu i misji' : 'Narzędzia protokołu i misji'}</button>
+        <div className={`${showProtocolTools ? 'block' : 'hidden'} shrink-0 max-h-[45dvh] overflow-y-auto lg:block lg:max-h-none`}>
         <div className="flex flex-wrap items-end gap-2 border-b border-slate-800 bg-slate-900/60 px-3 py-2">
           <label className="flex min-w-48 flex-1 flex-col gap-1 text-[10px] text-slate-400">
             Polecenie strukturalne
@@ -335,6 +338,7 @@ export const AgentCommsView: React.FC<AgentCommsViewProps> = ({
         </div>
 
         {/* Messages Stream */}
+        </div>
         <div
           ref={chatScrollRef}
           onScroll={(event) => {
@@ -595,3 +599,4 @@ export const AgentCommsView: React.FC<AgentCommsViewProps> = ({
     </div>
   );
 };
+

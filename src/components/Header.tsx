@@ -16,6 +16,7 @@ export const Header: React.FC<HeaderProps> = ({ dataStore, onReset, onShowReport
   const [syncing, setSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [actionError, setActionError] = useState('');
 
   const rawVersion =
     dataStore.config?.sys_version ||
@@ -26,18 +27,21 @@ export const Header: React.FC<HeaderProps> = ({ dataStore, onReset, onShowReport
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      setCurrentTime(now.toLocaleTimeString('pl-PL', { hour12: false }) + ' CEST');
+      setCurrentTime(new Intl.DateTimeFormat('pl-PL', { timeZone: 'Europe/Warsaw', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }).format(now));
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleCopyMonolith = () => {
+  const handleCopyMonolith = async () => {
     const py = generatePythonMonolith(dataStore);
-    navigator.clipboard.writeText(py);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(py);
+      setCopied(true);
+      setActionError('');
+      setTimeout(() => setCopied(false), 2000);
+    } catch { setActionError('Przeglądarka nie pozwoliła skopiować kodu. Użyj przycisku pobierania.'); }
   };
 
   const handleDownloadMonolith = () => {
@@ -55,10 +59,13 @@ export const Header: React.FC<HeaderProps> = ({ dataStore, onReset, onShowReport
     if (!onSyncSystem || syncing) return;
     setSyncing(true);
     setSyncSuccess(false);
+    setActionError('');
     try {
       await onSyncSystem();
       setSyncSuccess(true);
       setTimeout(() => setSyncSuccess(false), 3200);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Synchronizacja nie powiodła się.');
     } finally {
       setSyncing(false);
     }
@@ -70,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({ dataStore, onReset, onShowReport
       <div className="mx-auto flex w-full min-w-0 flex-wrap items-center justify-between gap-2 px-2 py-2 text-xs sm:gap-3 sm:px-4">
         {/* Brand & Kernel identity */}
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400 shadow-[0_0_10px_#10b981]" />
@@ -78,7 +85,7 @@ export const Header: React.FC<HeaderProps> = ({ dataStore, onReset, onShowReport
             <span             className="bg-gradient-to-r from-blue-100 via-cyan-200 to-blue-300 bg-clip-text font-mono text-sm font-extrabold tracking-[0.16em] text-transparent">
             BASTILLA OS
             </span>
-            <span className="rounded border border-blue-200/15 bg-blue-950/50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-100/75">
+            <span title={formattedVersion} className="max-w-36 truncate rounded border border-blue-200/15 bg-blue-950/50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-100/75 sm:max-w-none">
               {formattedVersion}
             </span>
             <span className="hidden items-center gap-1 rounded border border-emerald-400/15 bg-emerald-950/30 px-2 py-0.5 font-mono text-[9px] text-emerald-300 lg:inline-flex">
@@ -101,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({ dataStore, onReset, onShowReport
         </div>
 
         {/* Runtime State Indicators */}
-        <div className="flex w-full min-w-0 items-center flex-nowrap gap-2 overflow-x-auto text-[11px] font-mono text-slate-400 sm:w-auto sm:max-w-full">
+        <div className="header-actions flex w-full min-w-0 flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 sm:w-auto sm:max-w-full">
           {dataStore.config?.root_privileges && (
             <div className="hidden items-center gap-1.5 bg-red-950/80 border border-red-500/60 px-2.5 py-1 rounded text-red-300 font-bold shadow-[0_0_12px_rgba(239,68,68,0.3)] sm:flex">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
@@ -138,10 +145,11 @@ export const Header: React.FC<HeaderProps> = ({ dataStore, onReset, onShowReport
           </div>
 
           {/* Quick Action buttons */}
-          <div className="flex shrink-0 items-center gap-1 ml-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
             {onSyncSystem && (
               <button
                 onClick={handleTriggerSync}
+                disabled={syncing}
                 className={`flex items-center gap-1 px-3 py-1 rounded-lg transition cursor-pointer font-bold ${
                   syncSuccess
                     ? 'bg-emerald-950/90 text-emerald-200 border border-emerald-500/70 shadow-[0_0_12px_rgba(16,185,129,0.5)]'
@@ -212,7 +220,7 @@ export const Header: React.FC<HeaderProps> = ({ dataStore, onReset, onShowReport
             </button>
 
             <a
-              href="https://ais-dev-fok64b3rdtxjj3jjk7ft76-873947482948.europe-west2.run.app"
+              href="/"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 px-2.5 py-1 rounded bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-700/60 transition cursor-pointer font-bold shadow-[0_0_8px_rgba(59,130,246,0.3)]"
@@ -232,6 +240,8 @@ export const Header: React.FC<HeaderProps> = ({ dataStore, onReset, onShowReport
           </div>
         </div>
       </div>
+      {actionError && <p role="alert" className="px-3 pb-2 text-xs text-red-200">{actionError}</p>}
     </header>
   );
 };
+

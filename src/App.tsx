@@ -11,26 +11,27 @@ import { SystemResourceMeters } from './components/SystemResourceMeters';
 import { OllamaModelManager } from './components/OllamaModelManager';
 import { BackgroundAgentsStatus } from './components/BackgroundAgentsStatus';
 import { Navigation, TabId, initialTabFromLocation } from './components/Navigation';
-import { TerminalView } from './components/TerminalView';
-import { AgentCommsView } from './components/AgentCommsView';
-import { ChatApprovalsView } from './components/ChatApprovalsView';
-import { MonolithView } from './components/MonolithView';
-import { DataStoreView } from './components/DataStoreView';
-import { ChronolithView } from './components/ChronolithView';
-import { DiagnosticsView } from './components/DiagnosticsView';
+const TerminalView = React.lazy(() => import('./components/TerminalView').then((module) => ({ default: module.TerminalView })));
+const AgentCommsView = React.lazy(() => import('./components/AgentCommsView').then((module) => ({ default: module.AgentCommsView })));
+const ChatApprovalsView = React.lazy(() => import('./components/ChatApprovalsView').then((module) => ({ default: module.ChatApprovalsView })));
+const MonolithView = React.lazy(() => import('./components/MonolithView').then((module) => ({ default: module.MonolithView })));
+const DataStoreView = React.lazy(() => import('./components/DataStoreView').then((module) => ({ default: module.DataStoreView })));
+const ChronolithView = React.lazy(() => import('./components/ChronolithView').then((module) => ({ default: module.ChronolithView })));
+const DiagnosticsView = React.lazy(() => import('./components/DiagnosticsView').then((module) => ({ default: module.DiagnosticsView })));
 import { ReportModal } from './components/ReportModal';
-import { TaskProcessMatrix } from './components/TaskProcessMatrix';
-import { MemorySchemaGraph } from './components/MemorySchemaGraph';
-import { TemporalMatrix } from './components/TemporalMatrix';
-import { AstyriaMissionView } from './components/AstyriaMissionView';
-import { TriadVisualization } from './components/TriadVisualization';
+const TaskProcessMatrix = React.lazy(() => import('./components/TaskProcessMatrix').then((module) => ({ default: module.TaskProcessMatrix })));
+const MemorySchemaGraph = React.lazy(() => import('./components/MemorySchemaGraph').then((module) => ({ default: module.MemorySchemaGraph })));
+const TemporalMatrix = React.lazy(() => import('./components/TemporalMatrix').then((module) => ({ default: module.TemporalMatrix })));
+const AstyriaMissionView = React.lazy(() => import('./components/AstyriaMissionView').then((module) => ({ default: module.AstyriaMissionView })));
+const TriadVisualization = React.lazy(() => import('./components/TriadVisualization').then((module) => ({ default: module.TriadVisualization })));
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SystemHealthDock } from './components/SystemHealthDock';
-import { FileExplorer } from './components/FileExplorer';
-import { AppsStudioView } from './components/AppsStudioView';
-import { WithoutNlpView } from './components/WithoutNlpView';
-import { GitHubExportView } from './components/GitHubExportView';
-import { BastillaDashboard } from './components/BastillaDashboard';
+const FileExplorer = React.lazy(() => import('./components/FileExplorer').then((module) => ({ default: module.FileExplorer })));
+const AppsStudioView = React.lazy(() => import('./components/AppsStudioView').then((module) => ({ default: module.AppsStudioView })));
+const WithoutNlpView = React.lazy(() => import('./components/WithoutNlpView').then((module) => ({ default: module.WithoutNlpView })));
+const GitHubExportView = React.lazy(() => import('./components/GitHubExportView').then((module) => ({ default: module.GitHubExportView })));
+const BastillaDashboard = React.lazy(() => import('./components/BastillaDashboard').then((module) => ({ default: module.BastillaDashboard })));
+const GPTActionsView = React.lazy(() => import('./components/GPTActionsView').then((module) => ({ default: module.GPTActionsView })));
 import {
   AstyriaMissionAction,
   AgentProtocolReply,
@@ -79,6 +80,20 @@ export default function App() {
   const [agentError, setAgentError] = useState<string | null>(null);
   const [chatSystemChange, setChatSystemChange] = useState<ChatSystemChange | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+
+  // Keep the composer and navigation visible above the Android software keyboard.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const resize = () => document.documentElement.style.setProperty('--app-height', `${viewport?.height ?? window.innerHeight}px`);
+    resize();
+    viewport?.addEventListener('resize', resize);
+    window.addEventListener('resize', resize);
+    return () => {
+      viewport?.removeEventListener('resize', resize);
+      window.removeEventListener('resize', resize);
+      document.documentElement.style.removeProperty('--app-height');
+    };
+  }, []);
 
   // Expose navigation to window for internal component linking
   useEffect(() => {
@@ -193,10 +208,13 @@ export default function App() {
         if (stateData?.store) {
           const normalized = normalizeDataStore(stateData.store);
           setDataStore(normalized);
+          return;
         }
       }
+      throw new Error('Synchronizacja nie powiodła się. Sprawdź połączenie z serwerem.');
     } catch (e) {
       console.error(e);
+      throw e;
     }
   };
 
@@ -486,7 +504,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex min-h-dvh min-w-0 max-w-full flex-col overflow-x-hidden bg-[#050b18] font-sans text-slate-100 selection:bg-cyan-400/30 selection:text-cyan-100">
+      <div className="app-shell flex h-[var(--app-height,100dvh)] min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-[#050b18] font-sans text-slate-100 selection:bg-cyan-400/30 selection:text-cyan-100">
         <Header
           dataStore={dataStore}
           onReset={handleResetToDefault}
@@ -508,7 +526,8 @@ export default function App() {
             versionCount={dataStore?.update_history?.length || 0}
           />
 
-        <main className={`flex min-w-0 flex-1 flex-col overflow-x-hidden ${activeTab === 'comms' || activeTab === 'terminal' ? 'min-h-[75dvh] w-full lg:min-h-[calc(100dvh-7rem)]' : 'min-h-0'}`}>
+        <main id="main-content" className={`app-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden ${activeTab === 'comms' || activeTab === 'terminal' ? 'overflow-y-hidden' : 'overflow-y-auto'}`}>
+          <React.Suspense fallback={<p role="status" className="p-4 text-sm text-cyan-200">Wczytywanie modułu…</p>}>
           {activeTab === 'home' && <SystemResourceMeters />}
           {activeTab === 'home' && <OllamaModelManager />}
           {activeTab === 'home' && <BackgroundAgentsStatus />}
@@ -638,6 +657,8 @@ export default function App() {
           {activeTab === 'github' && (
             <GitHubExportView />
           )}
+          {activeTab === 'gpt_actions' && <GPTActionsView />}
+          </React.Suspense>
         </main>
         </div>
 
@@ -652,3 +673,4 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+

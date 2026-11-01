@@ -36,6 +36,28 @@ html, body {
   flex-direction: column;
 }
 
+.app-shell { padding-top: var(--sat); padding-left: var(--sal); padding-right: var(--sar); }
+.app-main { overflow-wrap: anywhere; overscroll-behavior-y: contain; }
+.app-main > * { flex-shrink: 0; }
+.app-main > :only-child { flex-shrink: 1; }
+.app-main img, .app-main canvas, .app-main iframe { max-width: 100%; }
+.app-main select, .app-main input, .app-main textarea { min-width: 0; max-width: 100%; }
+.app-main pre { max-width: 100%; overflow-x: auto; }
+.app-navigation { padding-bottom: var(--sab); }
+.health-dock { bottom: calc(4.5rem + var(--sab)); }
+button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--neon-cyan);
+  outline-offset: 3px;
+}
+@media (max-width: 639px) {
+  .header-actions button, .header-actions a { min-height: 40px; min-width: 40px; justify-content: center; }
+  .app-main button:not([role="switch"]) { min-height: 40px; }
+}
+@media (min-width: 1024px) { .health-dock { bottom: calc(1rem + var(--sab)); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
+
 /* Subtle futuristic background cyber-grid */
 .cyber-grid {
   background-size: 32px 32px;
@@ -150,4 +172,5 @@ input, select, textarea {
 .animate-neon-pulse {
   animation: neonPulse 2.5s infinite ease-in-out;
 }
+
 

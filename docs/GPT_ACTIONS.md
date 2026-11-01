@@ -47,4 +47,11 @@ To konfiguracja osobnego własnego GPT. Nie dodaje automatycznie narzędzia do w
 
 `node --test tests/gpt-actions.test.mjs` testuje schemat, uwierzytelnianie, walidację, wybór agenta, timeout, limit współbieżności, błędy i wielkość odpowiedzi z atrapą dostawcy. Nie stanowi dowodu połączenia z wdrożonym AI.
 
-Podczas przygotowania integracji kopia repozytorium nie zawierała m.in. src/kernel/llmChain.ts i src/kernel/agentProtocol.ts, choć server.ts je importuje. Należy zsynchronizować pełne źródła z działającym projektem AI Studio przed uruchomieniem całości. Nie zmieniaj istniejącego kodu AI Studio na niekompletną kopię z GitHuba. Publiczny host i prawdziwy token trzeba skonfigurować w środowisku wdrożenia; nie są dostarczone przez ten commit.
+Brakujące wcześniej moduły jądra zostały przywrócone w repozytorium. Publiczny host i prawdziwy token nadal trzeba skonfigurować w środowisku wdrożenia. Nie używaj adresów ais-dev- ani ais-pre-: podgląd AI Studio wymaga ciasteczek przeglądarki, których GPT Actions nie zastępuje. Walidator odrzuca takie adresy.
+
+## Diagnostyka w interfejsie
+
+Otwórz **Połączenie ChatGPT** w bocznej nawigacji albo w menu **Więcej** na telefonie. Ekran odczytuje `/api/gpt-actions/setup`: pokazuje ustawienie publicznego adresu, obecność tokenu i konfigurację dostawców bez ujawniania sekretów. Gotowość konfiguracji nie oznacza udanego wywołania modelu. Ostateczny test wykonaj w edytorze GPT.
+
+Jeśli publikacja Google pokazuje „No billing setup” i brak kwalifikacji do Starter Tier, kod aplikacji nie może tego naprawić. Potrzebne jest środowisko publicznego hostingu z działającym backendem i modelem. Nie należy traktować przekierowania HTTP 302 do `__cookie_check.html` jako działającego API.
+

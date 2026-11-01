@@ -480,7 +480,7 @@ export const AppsStudioView: React.FC<AppsStudioViewProps> = ({
   };
 
   return (
-    <div className="flex-1 bg-slate-950 flex flex-col font-mono text-slate-200 overflow-hidden">
+    <div className="min-h-0 min-w-0 flex-1 bg-slate-950 flex flex-col font-mono text-slate-200 overflow-hidden">
       {/* Toast Notification */}
       {notificationMsg && (
         <div className="absolute top-16 right-6 z-50 bg-emerald-950 border border-emerald-500/80 text-emerald-300 px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 animate-bounce">
@@ -496,7 +496,7 @@ export const AppsStudioView: React.FC<AppsStudioViewProps> = ({
             <LayoutGrid className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
                 Studio Aplikacji & Kreator Terminalowy
               </h1>
@@ -539,8 +539,8 @@ export const AppsStudioView: React.FC<AppsStudioViewProps> = ({
       </div>
 
       {/* Sub-Navigation Tabs */}
-      <div className="bg-slate-900/80 border-b border-slate-800 px-4 flex items-center justify-between">
-        <div className="flex items-center space-x-1 py-1">
+      <div className="shrink-0 min-w-0 overflow-x-auto bg-slate-900/80 border-b border-slate-800 px-2 sm:px-4 flex items-center justify-between">
+        <div className="flex shrink-0 items-center space-x-1 whitespace-nowrap py-1">
           <button
             onClick={() => setActiveSubTab('library')}
             className={`flex items-center gap-2 px-3.5 py-2 text-xs font-medium rounded-t-md transition border-b-2 cursor-pointer ${
@@ -1062,7 +1062,7 @@ export const AppsStudioView: React.FC<AppsStudioViewProps> = ({
             {/* Sandbox Iframe Container */}
             <div className="flex-1 bg-slate-950 p-4 flex items-center justify-center overflow-auto">
               <div
-                className={`h-full transition-all duration-300 rounded-xl overflow-hidden border border-slate-800 shadow-2xl bg-black ${
+                className={`h-full min-h-64 max-w-full transition-all duration-300 rounded-xl overflow-hidden border border-slate-800 shadow-2xl bg-black ${
                   previewViewport === 'desktop'
                     ? 'w-full'
                     : previewViewport === 'tablet'
@@ -1283,3 +1283,4 @@ export const AppsStudioView: React.FC<AppsStudioViewProps> = ({
     </div>
   );
 };
+

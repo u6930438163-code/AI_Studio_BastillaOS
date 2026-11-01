@@ -22,7 +22,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, dataS
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4">
-      <div className="bg-slate-950 border border-slate-800 rounded-xl max-w-3xl w-full max-h-[88vh] flex flex-col font-mono text-xs shadow-2xl overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-label="Raport systemu" className="bg-slate-950 border border-slate-800 rounded-xl max-w-3xl w-full max-h-[88dvh] flex flex-col font-mono text-xs shadow-2xl overflow-hidden">
         {/* Modal Header */}
         <div className="bg-slate-900 border-b border-slate-800 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -33,6 +33,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, dataS
           </div>
           <button
             onClick={onClose}
+            aria-label="Zamknij raport"
             className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
@@ -71,3 +72,4 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, dataS
     </div>
   );
 };
+

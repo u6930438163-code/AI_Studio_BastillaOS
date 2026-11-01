@@ -8,6 +8,9 @@ export function gptActionsSchema(origin) {
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
     throw new Error('GPT_ACTIONS_PUBLIC_URL must be an HTTPS origin without a path.');
   }
+  if (/^ais-(dev|pre)-.*\.run\.app$/i.test(url.hostname)) {
+    throw new Error('AI Studio preview URLs require browser cookies. Use a deployed public HTTPS origin.');
+  }
   const result = (properties) => ({
     description: 'JSON response',
     content: { 'application/json': { schema: { type: 'object', properties } } },
@@ -46,6 +49,21 @@ export function registerGptActions(app, { chat, providers, env = process.env, ti
   let schema;
   try { schema = gptActionsSchema((env.GPT_ACTIONS_PUBLIC_URL || '').trim()); } catch {}
   let active = 0;
+  app.get('/api/gpt-actions/setup', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const current = providers();
+    return res.json({
+      publicUrlConfigured: Boolean(schema),
+      tokenConfigured: token.length >= 32,
+      providerConfigured: current.length > 0,
+      publicOrigin: schema?.servers[0].url ?? null,
+      schemaUrl: schema ? `${schema.servers[0].url}/api/gpt-actions/openapi.json` : null,
+      providers: current,
+      agents: AGENTS,
+      readyForExternalTest: Boolean(schema && token.length >= 32 && current.length),
+      externalConnectionVerified: false,
+    });
+  });
   const authorize = (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     if (token.length < 32 || !schema) return res.status(503).json({ error: 'Configure GPT_ACTIONS_TOKEN (32+ characters) and GPT_ACTIONS_PUBLIC_URL (HTTPS origin).' });
@@ -90,3 +108,4 @@ export function registerGptActions(app, { chat, providers, env = process.env, ti
     }
   });
 }
+

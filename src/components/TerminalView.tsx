@@ -601,6 +601,27 @@ Integralność tagów:  ZGODNA (<<<DATA_STORE_START>>> ... <<<DATA_STORE_END>>>)
         break;
       }
 
+      case 'root':
+      case 'sudo':
+      case 'exec':
+      case 'sh':
+      case 'infra':
+      case 'alex':
+      case 'sync':
+      case 'set':
+      case 'bump':
+      case 'config':
+      case 'history':
+      case 'clear_chat': {
+        const execute = onExecutePythonCommandRef.current;
+        if (!execute) { addLog('Brak połączenia z terminalem serwera.', 'error'); break; }
+        try {
+          const result = await execute(rawCmd);
+          addLog(result.output, 'output');
+        } catch (error: any) { addLog(`Błąd terminala serwera: ${error.message}`, 'error'); }
+        break;
+      }
+
       default: {
         // Przywrócona konsola Binarnej Hiperprzestrzeni: każde polecenie → wektor 128-bit + NLP (OpenRouter) + komendy jądra
         addLog('[HYPEROS] Przetwarzanie w Binarnej Hiperprzestrzeni (128-bit) + NLP...', 'system');
@@ -756,3 +777,4 @@ Integralność tagów:  ZGODNA (<<<DATA_STORE_START>>> ... <<<DATA_STORE_END>>>)
     </div>
   );
 };
+
