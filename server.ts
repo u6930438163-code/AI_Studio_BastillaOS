@@ -266,6 +266,20 @@ app.get('/api/system/metrics', (_req, res) => {
   });
 });
 
+// Ollama model inventory. Uses the configured local Ollama API; no shell commands.
+app.get('/api/ollama/models', async (_req, res) => {
+  const base = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\\/+$/, '');
+  try {
+    const response = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
+    const data = await response.json() as { models?: unknown[] };
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ models: Array.isArray(data.models) ? data.models : [], configuredModel: LLM_CHAIN_CONFIG.ollamaModel, connected: true });
+  } catch {
+    return res.status(503).json({ models: [], configuredModel: LLM_CHAIN_CONFIG.ollamaModel, connected: false, error: 'Ollama nie odpowiada na skonfigurowanym adresie.' });
+  }
+});
+
 const EXPORTS_DIR = path.resolve('exports');
 if (!fs.existsSync(EXPORTS_DIR)) {
   fs.mkdirSync(EXPORTS_DIR, { recursive: true });
