@@ -11,6 +11,7 @@ on:
       - 'package-lock.json'
       - 'vite.config.ts'
       - '.github/workflows/bastilla-app-check.yml'
+      - 'bastillaos/vm-gemini-4/**'
   pull_request:
     paths:
       - 'src/**'
@@ -40,6 +41,18 @@ jobs:
         run: npm test
       - name: Production frontend build
         run: npm run build
+      - name: Validate VM Docker Compose and build image
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bastillaos/vm-gemini-4/data
+          VM_UID="$(id -u)" VM_GID="$(id -g)" docker compose \
+            -f bastillaos/vm-gemini-4/compose.yaml config --quiet
+          VM_UID="$(id -u)" VM_GID="$(id -g)" KVM_GID=0 docker compose \
+            -f bastillaos/vm-gemini-4/compose.yaml \
+            -f bastillaos/vm-gemini-4/compose.kvm.yaml config --quiet
+          docker build --tag bastilla-vm-ci:latest bastillaos/vm-gemini-4
+          echo 'VM Compose configurations and Docker image build: PASS' >> "$GITHUB_STEP_SUMMARY"
       - name: HTTP startup smoke test
         shell: bash
         env:
