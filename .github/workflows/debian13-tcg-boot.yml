@@ -1,6 +1,10 @@
 name: BastillaOS Debian 13 TCG boot verification
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/debian13-tcg-boot.yml'
 jobs:
   debian13-boot:
     runs-on: ubuntu-latest
