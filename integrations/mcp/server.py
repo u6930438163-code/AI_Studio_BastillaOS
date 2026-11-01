@@ -1,4 +1,4 @@
-"""BastillaOS read-only MCP bridge for the existing local Ollama-backed API.
+"""BastillaOS MCP bridge; read-only tools are enabled by default.
 
 Run on the same host as BastillaOS. Do not expose this service directly to
 the public internet: place it behind HTTPS with authenticated access.
@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 BASE = os.environ.get("BASTILLA_API_URL", "http://127.0.0.1:3000").rstrip("/")
 TIMEOUT = float(os.environ.get("BASTILLA_API_TIMEOUT", "90"))
+READ_ONLY = os.environ.get("BASTILLA_MCP_READ_ONLY", "1").strip().lower() not in {"0", "false", "no"}
 mcp = FastMCP("BastillaOS Ollama Bridge", host="127.0.0.1", port=8000, json_response=True)
 
 async def request(method: str, path: str, payload=None):
@@ -51,7 +52,6 @@ async def vm_status() -> dict:
         runtime = {"success": False, "error": "Docker runtime unavailable"}
     return {"configuration": configuration, "runtime": runtime}
 
-@mcp.tool()
 async def agent_command(agent: str = "triad", command: str = "SYSTEM_STATUS") -> dict:
     """Run an allowlisted diagnostic; the BastillaOS API records its transcript."""
     if agent not in {"triad", "Alex", "Astyria", "Aurelius"}:
@@ -59,6 +59,9 @@ async def agent_command(agent: str = "triad", command: str = "SYSTEM_STATUS") ->
     if command not in {"SYSTEM_STATUS", "DATA_STORE_AUDIT", "VERSION_TIMELINE"}:
         raise ValueError("Unsupported diagnostic command")
     return await request("POST", "/api/triad/command", {"agent": agent, "command": command})
+
+if not READ_ONLY:
+    mcp.tool()(agent_command)
 
 if __name__ == "__main__":
     # Bind only to loopback. Use a separately authenticated HTTPS reverse proxy.
