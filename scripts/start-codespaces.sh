@@ -7,7 +7,7 @@ if ! command -v npm >/dev/null 2>&1; then
   echo "npm is missing; cannot start BastillaOS." >&2
   exit 1
 fi
-if [[ ! -d node_modules ]]; then
+if [[ ! -x node_modules/.bin/tsx ]]; then
   npm ci
 fi
 # keep-alive.sh uses flock to avoid duplicate servers after Codespaces restarts.
@@ -22,7 +22,12 @@ for attempt in {1..30}; do
   sleep 2
 done
 if (( ready == 0 )); then
-  echo "ERROR: BastillaOS did not become HTTP-ready within 60 seconds. Inspect /tmp/svl.log" >&2
+  echo "ERROR: BastillaOS did not become HTTP-ready. Recent application log:" >&2
+  if [[ -f /tmp/svl.log ]]; then
+    tail -n 40 /tmp/svl.log >&2
+  else
+    echo "No /tmp/svl.log found; inspect $LOG" >&2
+  fi
   exit 1
 fi
 echo "BastillaOS HTTP endpoint is responding. Run diagnostics to verify JSON content."
