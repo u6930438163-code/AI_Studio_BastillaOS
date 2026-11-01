@@ -45,6 +45,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sh -n bastillaos/vm-gemini-4/entrypoint.sh
           mkdir -p bastillaos/vm-gemini-4/data
           VM_UID="$(id -u)" VM_GID="$(id -g)" docker compose \
             -f bastillaos/vm-gemini-4/compose.yaml config --quiet
