@@ -31,7 +31,10 @@ jobs:
             -display none -serial file:boot.log -monitor none -no-reboot || code=$?
           echo "QEMU exit code: ${code:-0}"
           tail -n 100 boot.log || true
-          if grep -Eiq 'Debian GNU/Linux 13|Debian GNU/Linux trixie|login:' boot.log; then
+          if [[ "${code:-0}" != "0" && "${code:-0}" != "124" ]]; then
+            echo "FAIL: QEMU terminated unexpectedly"; exit 1
+          fi
+          if grep -Eiq 'Debian GNU/Linux 13|Debian GNU/Linux trixie|Debian GNU/Linux.*trixie' boot.log; then
             echo "PASS: Debian 13 reached serial boot output"
           else
             echo "FAIL: Debian 13 boot not confirmed"; exit 1
