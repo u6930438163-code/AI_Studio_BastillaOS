@@ -10,8 +10,9 @@ if [[ -f /etc/bastilla-connect/config.env ]]; then
     esac
   done < /etc/bastilla-connect/config.env
 fi
+export PYTHONPATH="/opt/bastilla-connect/vendor${PYTHONPATH:+:$PYTHONPATH}"
 case "${1:-check}" in
-  check) exec /opt/bastilla-connect/venv/bin/python /opt/bastilla-connect/connect.py ;;
-  mcp) shift; exec /opt/bastilla-connect/venv/bin/python /opt/bastilla-connect/client.py "$@" ;;
+  check) exec /usr/bin/python3 /opt/bastilla-connect/connect.py ;;
+  mcp) shift; exec /usr/bin/python3 /opt/bastilla-connect/client.py "$@" ;;
   *) echo "Usage: bastilla-connect [check|mcp [--call ollama_status|agents_status|vm_status]]" >&2; exit 2 ;;
 esac
