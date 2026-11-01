@@ -72,6 +72,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>(initialTabFromLocation);
   const [isAgentLoading, setIsAgentLoading] = useState(false);
   const [terminalBusy, setTerminalBusy] = useState(false);
+  const terminalPendingRef = useRef(0);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [chatSystemChange, setChatSystemChange] = useState<ChatSystemChange | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -140,6 +141,7 @@ export default function App() {
 
   // Execute terminal command directly on Python SVL Kernel
   const handleExecutePythonCommand = async (command: string) => {
+    terminalPendingRef.current += 1;
     setTerminalBusy(true);
     try {
     const res = await fetch('/api/kernel/command', {
@@ -156,7 +158,8 @@ export default function App() {
     }
     return data;
     } finally {
-      setTerminalBusy(false);
+      terminalPendingRef.current = Math.max(0, terminalPendingRef.current - 1);
+      setTerminalBusy(terminalPendingRef.current > 0);
     }
   };
 
