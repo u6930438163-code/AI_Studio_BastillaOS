@@ -6,6 +6,7 @@ import {
   normalizeDataStore,
 } from './kernel/svlKernel';
 import { Header } from './components/Header';
+import { LiveProgressBar } from './components/LiveProgressBar';
 import { Navigation, TabId, initialTabFromLocation } from './components/Navigation';
 import { TerminalView } from './components/TerminalView';
 import { AgentCommsView } from './components/AgentCommsView';
@@ -70,6 +71,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<TabId>(initialTabFromLocation);
   const [isAgentLoading, setIsAgentLoading] = useState(false);
+  const [terminalBusy, setTerminalBusy] = useState(false);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [chatSystemChange, setChatSystemChange] = useState<ChatSystemChange | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -138,6 +140,8 @@ export default function App() {
 
   // Execute terminal command directly on Python SVL Kernel
   const handleExecutePythonCommand = async (command: string) => {
+    setTerminalBusy(true);
+    try {
     const res = await fetch('/api/kernel/command', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -151,6 +155,9 @@ export default function App() {
       setDataStore(normalizeDataStore(data.state.store));
     }
     return data;
+    } finally {
+      setTerminalBusy(false);
+    }
   };
 
   // Full system & version synchronization via Astyria mission endpoint + kernel state
@@ -480,6 +487,12 @@ export default function App() {
           onShowReport={() => setShowReportModal(true)}
           onSyncSystem={handleSyncSystem}
         />
+
+        {(isAgentLoading || terminalBusy) && (
+          <div className="px-3 py-2">
+            <LiveProgressBar active label={terminalBusy ? 'Terminal — wykonywanie polecenia' : 'AI — przetwarzanie zapytania'} detail="Trwa rzeczywiste żądanie do serwera; procent nie jest dostępny." />
+          </div>
+        )}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
           <Navigation
