@@ -63,6 +63,34 @@ jobs:
               ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
               print('PASS Python syntax:', path)
           PY
+      - name: MCP protocol integration smoke test (mock backend)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/bastilla-mcp-test-venv
+          /tmp/bastilla-mcp-test-venv/bin/python -m pip install -q -r integrations/mcp/requirements.txt
+          /tmp/bastilla-mcp-test-venv/bin/python integrations/mcp/mock_api.py >/tmp/bastilla-mcp-mock.log 2>&1 &
+          mock_pid=$!
+          BASTILLA_API_URL=http://127.0.0.1:3902 /tmp/bastilla-mcp-test-venv/bin/python integrations/mcp/server.py >/tmp/bastilla-mcp-server.log 2>&1 &
+          mcp_pid=$!
+          trap 'kill "$mcp_pid" "$mock_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:3902/api/ollama/models >/dev/null 2>&1 && (echo >/dev/tcp/127.0.0.1/8000) >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != 1 ]]; then
+            cat /tmp/bastilla-mcp-mock.log /tmp/bastilla-mcp-server.log
+            exit 1
+          fi
+          /tmp/bastilla-mcp-test-venv/bin/python integrations/mcp/smoke_test.py || {
+            cat /tmp/bastilla-mcp-server.log
+            exit 1
+          }
+          echo 'MCP handshake and tool calls: PASS (mock backend, not live Ollama)' >> "$GITHUB_STEP_SUMMARY"
       - name: Validate VM Docker Compose and build image
         shell: bash
         run: |
