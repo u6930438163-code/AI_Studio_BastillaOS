@@ -15,17 +15,17 @@ authorization layer.
 From repository root, with a configured Google Cloud project:
 
 ```bash
-gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT/REPOSITORY/bastilla-mcp:latest \
-  --file integrations/mcp/Dockerfile.cloudrun .
+gcloud artifacts repositories create bastilla --repository-format=docker --location=europe-west2
+gcloud builds submit --config integrations/mcp/cloudbuild.yaml .
 ```
 
-If your `gcloud builds submit` version does not support `--file`, build and
-push the image using Docker or Cloud Build configuration instead.
+The Cloud Build configuration builds the container and pushes it to the
+`bastilla` Artifact Registry repository in `europe-west2`.
 
 ```bash
 gcloud run deploy bastilla-mcp \
-  --image REGION-docker.pkg.dev/PROJECT/REPOSITORY/bastilla-mcp:latest \
-  --region REGION \
+  --image europe-west2-docker.pkg.dev/PROJECT_ID/bastilla/bastilla-mcp:latest \
+  --region europe-west2 \
   --no-allow-unauthenticated \
   --set-env-vars BASTILLA_API_URL=https://YOUR-DEPLOYED-BASTILLA-API
 ```
