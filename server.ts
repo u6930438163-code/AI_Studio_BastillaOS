@@ -153,21 +153,24 @@ let activeServerPort = PORT;
 const PYTHON_SCRIPT_PATH = path.resolve('svl_kernel.py');
 const KERNEL_STORE_PATH = path.resolve(process.env.SVL_KERNEL_STORE_PATH || '.svl_kernel_store.json');
 
-// Configure high body limit (50MB) for file uploads, images, logs, and kernel snapshots
-app.use(express.json({ limit: '96mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Configurable request size for binary attachments encoded as base64 in JSON.
+// Keep a finite bound to prevent accidental out-of-memory crashes or denial of service.
+// Default 256 MiB of JSON payload; reverse proxies may impose their own limits.
+const requestedUploadLimit = Number(process.env.BASTILLA_UPLOAD_MAX_MB || 256);
+const uploadLimitMB = Number.isFinite(requestedUploadLimit)
+  ? Math.max(1, Math.min(1024, Math.floor(requestedUploadLimit)))
+  : 256;
+app.use(express.json({ limit: `${uploadLimitMB}mb` }));
+app.use(express.urlencoded({ limit: `${uploadLimitMB}mb`, extended: true }));
 
-// Catch payload too large or invalid body before routing
 app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err?.type === 'entity.too.large' || err?.status === 413) {
-    console.warn('[SERVER 413] Payload too large error intercepted and handled safely');
     return res.status(413).json({
-      error: 'Rozmiar przesłanych danych przekracza dozwolony limit (maks. 50 MB). Proszę wybrać mniejszy plik lub skompresować grafikę.'
+      error: `Przesłane dane przekraczają limit serwera (${uploadLimitMB} MiB). Zmień BASTILLA_UPLOAD_MAX_MB lub wyślij mniejszy plik.`,
     });
   }
   next(err);
 });
-
 
 // Track API key health globally to avoid repeated failing Pro requests
 let isProKeyHealthy = Boolean(POLLINATIONS_API_KEY);
