@@ -71,6 +71,11 @@ jobs:
           bash packaging/bastilla-connect/build-deb.sh
           dpkg-deb --info dist/bastilla-connect_*.deb
           dpkg-deb --contents dist/bastilla-connect_*.deb | grep '/usr/bin/bastilla-connect'
+          sudo apt-get install -y ./dist/bastilla-connect_*.deb
+          bastilla-connect check
+          /usr/bin/python3 -c 'import sys; sys.path.insert(0, "/opt/bastilla-connect/vendor"); import mcp, httpx; print("Installed MCP dependencies: OK")'
+          systemctl cat bastilla-connect.service bastilla-connect.timer >/dev/null
+          echo 'Debian package installation and installed Python dependencies: PASS (CI runner)' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload BastillaOS Connect Debian package
         uses: actions/upload-artifact@v4
         with:
