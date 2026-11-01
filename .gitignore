@@ -10,3 +10,7 @@ __pycache__/
 !.env.example
 .svl_kernel_store.json
 bastillaos/vm-gemini-4/data/
+
+# Local AI tool binaries; never synchronize these with source.
+.bastilla-tools/
+
