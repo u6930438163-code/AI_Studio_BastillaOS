@@ -227,6 +227,42 @@ app.get('/api/pollinations/image', async (req, res) => {
   }
 });
 
+// Host metrics sampled from Node.js OS counters; CPU uses deltas, not cumulative uptime.
+let previousCpuTimes = os.cpus().map(({ times }) => ({
+  idle: times.idle,
+  total: times.user + times.nice + times.sys + times.idle + times.irq,
+}));
+app.get('/api/system/metrics', (_req, res) => {
+  const cpus = os.cpus();
+  let busy = 0;
+  let total = 0;
+  cpus.forEach(({ times }, index) => {
+    const currentTotal = times.user + times.nice + times.sys + times.idle + times.irq;
+    const previous = previousCpuTimes[index];
+    if (previous) {
+      const deltaTotal = Math.max(0, currentTotal - previous.total);
+      const deltaIdle = Math.max(0, times.idle - previous.idle);
+      total += deltaTotal;
+      busy += Math.max(0, deltaTotal - deltaIdle);
+    }
+  });
+  previousCpuTimes = cpus.map(({ times }) => ({
+    idle: times.idle,
+    total: times.user + times.nice + times.sys + times.idle + times.irq,
+  }));
+  const totalMemory = os.totalmem();
+  const freeMemory = os.freemem();
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    cpuPercent: total > 0 ? Math.round((busy / total) * 1000) / 10 : null,
+    cpuCores: cpus.length,
+    ramTotalBytes: totalMemory,
+    ramUsedBytes: Math.max(0, totalMemory - freeMemory),
+    timestamp: Date.now(),
+    scope: 'server-host',
+  });
+});
+
 const EXPORTS_DIR = path.resolve('exports');
 if (!fs.existsSync(EXPORTS_DIR)) {
   fs.mkdirSync(EXPORTS_DIR, { recursive: true });
