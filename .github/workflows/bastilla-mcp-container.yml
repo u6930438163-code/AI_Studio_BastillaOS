@@ -37,9 +37,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run -d --name bastilla-mcp-test -p 127.0.0.1:18080:8080 \
-            --add-host=host.docker.internal:host-gateway \
-            -e BASTILLA_API_URL=http://host.docker.internal:3902 bastilla-mcp:test
+          docker run -d --name bastilla-mcp-test --network host \
+            -e PORT=18080 -e BASTILLA_API_URL=http://127.0.0.1:3902 bastilla-mcp:test
           trap 'docker logs bastilla-mcp-test || true; docker rm -f bastilla-mcp-test || true' EXIT
           export BASTILLA_MCP_URL=http://127.0.0.1:18080/mcp/
           for attempt in $(seq 1 30); do
