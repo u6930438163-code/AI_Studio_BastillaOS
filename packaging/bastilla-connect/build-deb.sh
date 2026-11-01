@@ -13,8 +13,9 @@ trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/DEBIAN" "$stage/opt/bastilla-connect" "$stage/usr/bin" "$stage/lib/systemd/system" "$stage/etc/bastilla-connect"
 cp integrations/mcp/client.py "$stage/opt/bastilla-connect/client.py"
 cp packaging/bastilla-connect/connect.py "$stage/opt/bastilla-connect/connect.py"
-python3 -m venv "$stage/opt/bastilla-connect/venv"
-"$stage/opt/bastilla-connect/venv/bin/python" -m pip install --disable-pip-version-check -r integrations/mcp/requirements.txt
+python3 -m venv "$stage-build-venv"
+"$stage-build-venv/bin/python" -m pip install --disable-pip-version-check --target "$stage/opt/bastilla-connect/vendor" -r integrations/mcp/requirements.txt
+rm -rf "$stage-build-venv"
 cat > "$stage/DEBIAN/control" <<EOF
 Package: bastilla-connect
 Version: $version
