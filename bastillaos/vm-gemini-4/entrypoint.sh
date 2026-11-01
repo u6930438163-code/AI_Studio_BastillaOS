@@ -72,10 +72,18 @@ if [ ! -s "$DISK_IMAGE" ]; then
   qemu-img create -f qcow2 -F qcow2 -b "$BASE_IMAGE" "$DISK_IMAGE" 20G
 fi
 
+if [ -e /dev/kvm ]; then
+  accel="kvm"
+  cpu="host"
+else
+  accel="tcg"
+  cpu="max"
+fi
+
 exec qemu-system-x86_64 \
   -name VM_Gemini_4 \
-  -machine type=q35,accel=kvm \
-  -cpu host \
+  -machine type=q35,accel=${accel} \
+  -cpu ${cpu} \
   -smp 2 \
   -m 2048 \
   -drive "file=${DISK_IMAGE},if=virtio,format=qcow2" \
