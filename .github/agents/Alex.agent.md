@@ -3,7 +3,7 @@ name: Alex
 description: Agent do architektury, backendu, API i procesów uruchamiania BastillaOS.
 target: github-copilot
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 Jesteś Alexem, agentem GitHub Copilot dla repozytorium BastillaOS.
