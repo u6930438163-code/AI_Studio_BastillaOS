@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/debian13-tcg-boot.yml'
       - 'scripts/check-virtualization.sh'
+      - 'bastillaos/vm-gemini-4/**'
 permissions:
   contents: read
 concurrency:
@@ -27,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           base=https://cloud.debian.org/images/cloud/trixie/latest
-          image=debian-13-generic-amd64.qcow2
+          image=debian-13-genericcloud-amd64.qcow2
           curl -fL --retry 3 --connect-timeout 30 -o debian13.qcow2 "$base/$image"
           curl -fL --retry 3 --connect-timeout 30 -o SHA512SUMS "$base/SHA512SUMS"
           expected=$(awk -v image="$image" '$2 == image || $2 == "*" image {print $1; exit}' SHA512SUMS)
