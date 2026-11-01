@@ -174,87 +174,56 @@ let isProKeyHealthy = Boolean(POLLINATIONS_API_KEY);
 let lastFailureTime = 0;
 const PRO_FAILURE_COOLDOWN = 1000 * 60 * 60; // 1 hour cooldown if key fails with 402/401
 
+// Compatibility endpoint retained for existing clients. Never return a fabricated image.
 app.get('/api/pollinations/image', async (req, res) => {
-  const { prompt, width = 1024, height = 1024, seed, model = 'flux' } = req.query;
-  
-  if (!prompt) {
-    return res.status(400).json({ error: 'Brak promptu dla grafiki' });
+  const prompt = typeof req.query.prompt === 'string' ? req.query.prompt.trim() : '';
+  if (!prompt || prompt.length > 4000) {
+    return res.status(400).json({ error: 'Prompt musi mieć od 1 do 4000 znaków.' });
   }
-
-  // Logic: Use Pro if it's healthy OR if the cooldown has expired
-  const cooldownActive = !isProKeyHealthy && (Date.now() - lastFailureTime < PRO_FAILURE_COOLDOWN);
-  const usePro = Boolean(POLLINATIONS_API_KEY) && isProKeyHealthy && !cooldownActive;
-  
-  const randomSeed = seed || Math.floor(Math.random() * 1000000);
-  const cleanPrompt = String(prompt).trim();
-  const shortPrompt = cleanPrompt.substring(0, 150);
-  
-  console.log(`[IMAGE GEN] Request: "${shortPrompt}..." | ProAllowed: ${usePro} | Seed: ${randomSeed}`);
-
-  const tryFetch = async (url: string, withAuth: boolean, timeoutMs = 15000) => {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-      
-      const options: RequestInit = {
-        method: 'GET',
-        headers: withAuth ? { 'Authorization': `Bearer ${POLLINATIONS_API_KEY}` } : {},
-        signal: controller.signal
-      };
-
-      const response = await fetch(url, options);
-      clearTimeout(timeout);
-      
-      if (response.ok) {
-        if (withAuth) isProKeyHealthy = true;
-        return response;
-      }
-      
-      if (response.status === 402 || response.status === 401) {
-        if (withAuth) {
-          isProKeyHealthy = false;
-          lastFailureTime = Date.now();
-          pushSystemLog('healed', 'INFRA', `[IMAGE GEN AUTO-HEAL] Przełączono klucz graficzny na zapasowy potok (${response.status}).`);
-        }
-      }
-      return response;
-    } catch (e: any) {
-      pushSystemLog('healed', 'INFRA', `[IMAGE GEN AUTO-HEAL] Przełączenie strumienia obrazu po opóźnieniu sieci (${e.name === 'AbortError' ? 'Timeout' : e.message}).`);
-      return null;
-    }
-  };
-
+  const apiKey = (process.env.OPENAI_API_KEY || '').trim();
+  if (!apiKey) {
+    return res.status(503).json({
+      error: 'Generowanie obrazu niedostępne: skonfiguruj OPENAI_API_KEY na serwerze.',
+    });
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
   try {
-    // Instant Zero-Latency High-Precision SVG Render (0ms - never hangs on "Renderowanie matrycy wizualnej...")
-    const svg = `<svg width="${width}" height="${height}" viewBox="0 0 1024 640" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#030712"/>
-          <stop offset="50%" stop-color="#0f172a"/>
-          <stop offset="100%" stop-color="#020617"/>
-        </linearGradient>
-        <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
-          <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#1e293b" stroke-width="0.75"/>
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#bgGrad)"/>
-      <rect width="100%" height="100%" fill="url(#grid)"/>
-      <circle cx="512" cy="300" r="210" fill="none" stroke="#06b6d4" stroke-width="2" stroke-dasharray="10,6" opacity="0.6"/>
-      <circle cx="512" cy="300" r="145" fill="none" stroke="#a855f7" stroke-width="2.5" opacity="0.85"/>
-      <circle cx="512" cy="300" r="75" fill="none" stroke="#10b981" stroke-width="2" opacity="0.9"/>
-      <line x1="302" y1="300" x2="722" y2="300" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
-      <line x1="512" y1="90" x2="512" y2="510" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
-      <line x1="512" y1="300" x2="635" y2="215" stroke="#10b981" stroke-width="3"/>
-      <circle cx="635" cy="215" r="7" fill="#10b981"/>
-      <text x="512" y="555" font-family="monospace" font-size="22" font-weight="bold" fill="#10b981" text-anchor="middle">SVL KERNEL v8.5.1-Desktop-Ready // DIRECT_ARCHITECTURE_ONLINE</text>
-      <text x="512" y="590" font-family="monospace" font-size="15" fill="#94a3b8" text-anchor="middle">${shortPrompt.replace(/[<>&"']/g, '').slice(0, 64)}</text>
-    </svg>`;
-    res.setHeader('Content-Type', 'image/svg+xml');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.send(svg);
-  } catch (error: any) {
-    pushSystemLog('healed', 'INFRA', `[IMAGE GEN RECOVERED] Zwrócono wektor zastępczy SVG: ${error.message}`);
-    res.status(200).setHeader('Content-Type', 'image/svg+xml').send(`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><rect width="100%" height="100%" fill="#0f172a"/><text x="400" y="250" fill="#38bdf8" font-family="monospace" text-anchor="middle">SVL RENDER READY</text></svg>`);
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
+        prompt,
+        size: '1024x1024',
+        response_format: undefined,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      console.error('[IMAGE GEN] Provider returned HTTP', response.status);
+      return res.status(502).json({ error: `Usługa generowania obrazu zwróciła HTTP ${response.status}.` });
+    }
+    const result = await response.json() as { data?: Array<{ b64_json?: string; url?: string }> };
+    const item = result.data?.[0];
+    if (item?.b64_json) {
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.send(Buffer.from(item.b64_json, 'base64'));
+    }
+    if (item?.url) {
+      // Do not fetch arbitrary URLs returned by a provider on the server.
+      return res.redirect(302, item.url);
+    }
+    return res.status(502).json({ error: 'Dostawca nie zwrócił obrazu.' });
+  } catch (error) {
+    console.error('[IMAGE GEN] Request failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(504).json({ error: 'Generowanie obrazu nie powiodło się lub przekroczyło limit czasu.' });
+  } finally {
+    clearTimeout(timeout);
   }
 });
 
