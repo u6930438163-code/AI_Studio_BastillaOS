@@ -17,6 +17,7 @@ on:
       - 'scripts/check-codespaces.sh'
       - 'scripts/auto-start-vm.sh'
       - 'scripts/keep-alive.sh'
+      - 'integrations/mcp/**'
   pull_request:
     paths:
       - 'bastillaos/vm-gemini-4/**'
@@ -25,6 +26,7 @@ on:
       - 'scripts/check-codespaces.sh'
       - 'scripts/auto-start-vm.sh'
       - 'scripts/keep-alive.sh'
+      - 'integrations/mcp/**'
       - 'src/**'
       - 'tests/**'
       - 'server.ts'
@@ -52,6 +54,15 @@ jobs:
         run: npm test
       - name: Production frontend build
         run: npm run build
+      - name: Validate MCP Python source
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for path in sorted(Path('integrations/mcp').glob('*.py')):
+              ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+              print('PASS Python syntax:', path)
+          PY
       - name: Validate VM Docker Compose and build image
         shell: bash
         run: |
