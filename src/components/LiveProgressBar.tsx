@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 type LiveProgressBarProps = {
   active: boolean;
@@ -14,13 +14,20 @@ export function LiveProgressBar({
   detail,
 }: LiveProgressBarProps) {
   if (!active) return null;
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  useEffect(() => {
+    if (!active) { setElapsedSeconds(0); return; }
+    const started = Date.now();
+    const timer = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [active]);
   const known = typeof progress === 'number' && Number.isFinite(progress);
   const percent = known ? Math.max(0, Math.min(100, progress)) : null;
   return (
     <div role="status" aria-live="polite" className="rounded-lg border border-cyan-700/40 bg-slate-950/90 p-3 text-sm text-slate-100">
       <div className="mb-2 flex items-center justify-between gap-3">
         <span>{label}</span>
-        <span className="font-mono text-cyan-300">{percent === null ? 'LIVE' : `${Math.round(percent)}%`}</span>
+        <span className="font-mono text-cyan-300">{percent === null ? `LIVE · ${elapsedSeconds}s` : `${Math.round(percent)}%`}</span>
       </div>
       <div
         role="progressbar"
