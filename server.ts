@@ -5919,12 +5919,16 @@ async function bootstrapTriadMission() {
 // Setup Vite middleware in dev or static files in prod
 async function startServer() {
   if (!fs.existsSync(KERNEL_STORE_PATH)) {
-    await runPythonKernel([
-      '--action',
-      'save_store',
-      '--store_json',
-      JSON.stringify(INITIAL_DATA_STORE),
-    ]);
+    try {
+      await runPythonKernel([
+        '--action',
+        'save_store',
+        '--store_json',
+        JSON.stringify(INITIAL_DATA_STORE),
+      ]);
+    } catch (error) {
+      console.error('[BOOT] Kernel store initialization failed; starting HTTP diagnostics anyway:', error);
+    }
   }
 
   // Podłączenie Triady, nadanie ROOT RING-0 i aktywacja misji BUILD_BEST_OS (idempotentne).
