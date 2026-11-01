@@ -20,7 +20,16 @@ async def request(method: str, path: str, payload=None):
 @mcp.tool()
 async def ollama_status() -> dict:
     """Read live local Ollama connectivity and model status."""
-    return await request("GET", "/api/ollama/models")
+    try:
+        return await request("GET", "/api/ollama/models")
+    except httpx.HTTPStatusError as exc:
+        # An offline Ollama returns HTTP 503 with a structured diagnostic.
+        # Keep that state visible instead of marking the MCP transport broken.
+        if exc.response.status_code == 503:
+            data = exc.response.json()
+            if isinstance(data, dict) and data.get("connected") is False:
+                return data
+        raise
 
 @mcp.tool()
 async def agents_status() -> dict:
