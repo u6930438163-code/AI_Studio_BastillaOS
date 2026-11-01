@@ -4367,12 +4367,12 @@ function isSameOriginLoopbackRequest(req: express.Request): boolean {
 }
 
 function getVmComposeEnvironment(): NodeJS.ProcessEnv {
-  const kvmGroupId = fs.statSync('/dev/kvm').gid;
+  const kvmGroupId = fs.existsSync('/dev/kvm') ? fs.statSync('/dev/kvm').gid : undefined;
   return {
     ...process.env,
     VM_UID: String(process.getuid?.() ?? 1000),
     VM_GID: String(process.getgid?.() ?? 1000),
-    KVM_GID: String(kvmGroupId),
+    ...(kvmGroupId === undefined ? {} : { KVM_GID: String(kvmGroupId) }),
   };
 }
 
@@ -4441,10 +4441,10 @@ app.post('/api/vm-gemini-4/provision', async (req, res) => {
       error: 'Nieprawidłowe potwierdzenie. Wymagana jest jawna akceptacja utworzenia VM_Gemini_4.',
     });
   }
-  if (!fs.existsSync(VM_GEMINI_4_COMPOSE_FILE) || !fs.existsSync(VM_GEMINI_4_KVM_OVERRIDE_FILE) || !fs.existsSync('/dev/kvm')) {
+  if (!fs.existsSync(VM_GEMINI_4_COMPOSE_FILE)) {
     return res.status(503).json({
       success: false,
-      error: 'Brakuje pliku definicji VM albo urządzenia KVM w środowisku.',
+      error: 'Brakuje pliku definicji VM w środowisku.',
     });
   }
 
@@ -4476,11 +4476,12 @@ app.post('/api/vm-gemini-4/provision', async (req, res) => {
       }
     }
 
+    const useKvm = fs.existsSync('/dev/kvm') && fs.existsSync(VM_GEMINI_4_KVM_OVERRIDE_FILE);
     await execFileAsync('docker', [
       'compose',
       '--project-name', VM_GEMINI_4_PROJECT,
       '--file', VM_GEMINI_4_COMPOSE_FILE,
-      '--file', VM_GEMINI_4_KVM_OVERRIDE_FILE,
+      ...(useKvm ? ['--file', VM_GEMINI_4_KVM_OVERRIDE_FILE] : []),
       'up', '--build', '--detach',
     ], {
       cwd: process.cwd(),
