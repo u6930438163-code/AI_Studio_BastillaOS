@@ -90,7 +90,9 @@ jobs:
             cat /tmp/bastilla-mcp-server.log
             exit 1
           }
-          echo 'MCP handshake and tool calls: PASS (mock backend, not live Ollama)' >> "$GITHUB_STEP_SUMMARY"
+          BASTILLA_REMOTE_MCP_URL=http://127.0.0.1:8000/mcp /tmp/bastilla-mcp-test-venv/bin/python integrations/mcp/client.py --call ollama_status
+          BASTILLA_REMOTE_MCP_URL=http://127.0.0.1:8000/mcp /tmp/bastilla-mcp-test-venv/bin/python integrations/mcp/client.py --call vm_status
+          echo 'MCP server and outbound client handshake: PASS (mock backend)' >> "$GITHUB_STEP_SUMMARY"
       - name: Validate VM Docker Compose and build image
         shell: bash
         run: |
