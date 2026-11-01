@@ -13,7 +13,6 @@ export function LiveProgressBar({
   progress = null,
   detail,
 }: LiveProgressBarProps) {
-  if (!active) return null;
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   useEffect(() => {
     if (!active) { setElapsedSeconds(0); return; }
@@ -23,6 +22,7 @@ export function LiveProgressBar({
   }, [active]);
   const known = typeof progress === 'number' && Number.isFinite(progress);
   const percent = known ? Math.max(0, Math.min(100, progress)) : null;
+  if (!active) return null;
   return (
     <div role="status" aria-live="polite" className="rounded-lg border border-cyan-700/40 bg-slate-950/90 p-3 text-sm text-slate-100">
       <div className="mb-2 flex items-center justify-between gap-3">
