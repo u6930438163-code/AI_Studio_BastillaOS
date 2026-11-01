@@ -82,6 +82,12 @@ jobs:
           fi
           node -e 'const x=require("/tmp/bastilla-command-validation.json"); if(x.success!==false) process.exit(1); console.log("Invalid agent command rejected")'
           echo 'Agent command validation: PASS (invalid command rejected)' >> "$GITHUB_STEP_SUMMARY"
+          curl --fail --silent --show-error --max-time 30 \
+            -H 'Content-Type: application/json' \
+            --data '{"command":"SYSTEM_STATUS","agent":"triad"}' \
+            http://127.0.0.1:3901/api/triad/command > /tmp/bastilla-agent-status.json
+          node -e 'const x=require("/tmp/bastilla-agent-status.json"); if(x.success!==true || x.command!=="SYSTEM_STATUS" || !x.replies || typeof x.replies!=="object") process.exit(1); console.log("Triad system status OK")'
+          echo 'Agent SYSTEM_STATUS: PASS (local kernel round-trip)' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload startup logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
