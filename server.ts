@@ -155,11 +155,11 @@ const KERNEL_STORE_PATH = path.resolve(process.env.SVL_KERNEL_STORE_PATH || '.sv
 
 // Configurable request size for binary attachments encoded as base64 in JSON.
 // Keep a finite bound to prevent accidental out-of-memory crashes or denial of service.
-// Default 256 MiB of JSON payload; reverse proxies may impose their own limits.
-const requestedUploadLimit = Number(process.env.BASTILLA_UPLOAD_MAX_MB || 256);
+// Default 1024 MiB of JSON payload; reverse proxies may impose their own limits.
+const requestedUploadLimit = Number(process.env.BASTILLA_UPLOAD_MAX_MB || 1024);
 const uploadLimitMB = Number.isFinite(requestedUploadLimit)
   ? Math.max(1, Math.min(1024, Math.floor(requestedUploadLimit)))
-  : 256;
+  : 1024;
 app.use(express.json({ limit: `${uploadLimitMB}mb` }));
 app.use(express.urlencoded({ limit: `${uploadLimitMB}mb`, extended: true }));
 
