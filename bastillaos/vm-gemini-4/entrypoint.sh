@@ -15,7 +15,7 @@ DISK_IMAGE="/data/vm-gemini-4-restricted.qcow2"
 if [ ! -s "$BASE_IMAGE" ]; then
   curl --fail --location --retry 3 --silent --show-error \
     "${IMAGE_BASE_URL}/SHA512SUMS" --output "$CHECKSUM_FILE"
-  expected_checksum="$(awk -v filename="$IMAGE_NAME" '$2 == filename { print $1; exit }' "$CHECKSUM_FILE")"
+  expected_checksum="$(awk -v filename="$IMAGE_NAME" '$2 == filename || $2 == "*" filename { print $1; exit }' "$CHECKSUM_FILE")"
   case "$expected_checksum" in
     ''|*[!0-9a-fA-F]*)
       echo "Official Debian image checksum is missing or invalid." >&2
