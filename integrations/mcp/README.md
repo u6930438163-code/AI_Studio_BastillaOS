@@ -4,6 +4,10 @@ This optional bridge exposes a **read-only** subset of the existing BastillaOS A
 
 ## Start
 
+From the repository root in a Linux Codespace, run `npm run start:mcp` to start the local services and perform the MCP smoke test. This checks local reachability, not remote ChatGPT authorization. Keep the terminal open while using the services.
+
+Alternatively, start the bridge manually:
+
 On the BastillaOS host, ensure BastillaOS and Ollama are already running.
 
 ```sh
@@ -17,7 +21,7 @@ By default the MCP endpoint is `http://127.0.0.1:8000/mcp` and the BastillaOS AP
 
 ## Available tools
 
-- `ollama_status`: GET /api/ai/status
+- `ollama_status`: GET /api/ollama/models
 - `agent_command`: limited diagnostics through POST /api/triad/command
 
 No shell access, arbitrary commands, file writes, or model cloud API keys are required.
