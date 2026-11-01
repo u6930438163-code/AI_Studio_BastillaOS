@@ -14,3 +14,4 @@ fi
 nohup bash scripts/keep-alive.sh >>"$LOG" 2>&1 </dev/null &
 echo "BastillaOS startup requested. Verify readiness using: curl -f http://127.0.0.1:3000/api/system/metrics. Log: /tmp/svl.log"
 echo "To provision Debian 13 explicitly: bash scripts/auto-start-vm.sh"
+echo "Run full readiness checks with: bash scripts/check-codespaces.sh"
