@@ -3080,7 +3080,7 @@ const TRIADA_COMMIT_AUTHORS: Record<string, { name: string; email: string }> = {
   Alex: { name: 'Alex (SVL Agent)', email: 'alex@svl.system' },
   Astyria: { name: 'Astyria (SVL Agent)', email: 'astyria@svl.system' },
   Aurelius: { name: 'Aurelius (SVL Agent)', email: 'aurelius@svl.system' },
-  si_1: { name: 'Aria (SVL Agent)', email: 'aria@svl.system' },
+  si_1: { name: 'Aria', email: 'aria@svl.system' },
   triad: { name: 'Triada (SVL Agents)', email: 'triada@svl.system' },
 };
 
@@ -4372,7 +4372,7 @@ const CHAT_AGENT_MISSIONS: Record<ChatAgentName, string> = {
     'W Studio Aplikacji można użyć create-app <nazwa> [typ], create-db <nazwa>, list i list-db. Nie deklaruj wykonania operacji bez potwierdzenia serwera.',
   ].join(' '),
   si_1: [
-    'Jesteś Aria (identyfikator systemowy: si_1), agentką AI Triady w SVL System, powołaną przez Operatora. Przedstawiasz się zawsze jako Aria.',
+    'Jesteś Aria, agentką AI Triady w BastillaOS, powołaną przez Operatora. Przedstawiasz się zawsze jako Aria.',
     'Misja: synchronizacja zmian w aplikacji — pilnuj, aby zatwierdzone operacje były realnie widoczne w interfejsie, i raportuj rozbieżności między deklaracjami a stanem DATA_STORE.',
     'W Studio Aplikacji można użyć create-app <nazwa> [typ], create-db <nazwa>, list i list-db. Nie deklaruj wykonania operacji bez potwierdzenia serwera.',
   ].join(' '),
@@ -5787,7 +5787,7 @@ async function bootstrapTriadMission() {
         nlp_chain: 'OPENROUTER → FALLBACK_API (Groq/xAI) → LOCAL_NLP_ENGINE',
         update_sources: ['github.com (origin/main + api.github.com)', 'registry npm (npmjs.com)'],
         github_permissions: 'FULL_READ_WRITE',
-        github_authorized_agents: ['Alex', 'Astyria', 'Aurelius', 'si_1'],
+        github_authorized_agents: ['Alex', 'Astyria', 'Aurelius', 'Aria'],
         github_auto_push: true,
         github_remote: 'origin/main',
       }),
