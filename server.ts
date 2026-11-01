@@ -3318,6 +3318,23 @@ async function autoSyncGitChanges(): Promise<void> {
   }
 }
 
+// Read-only diagnostics for live synchronization. Never exposes tokens or remote URLs.
+app.get('/api/github/auto-sync/status', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    enabled: autoGitSyncEnabled,
+    autoPushEnabled: triadaGithubAutoPush,
+    running: autoGitSyncRunning,
+    pushPending: autoGitPushPending,
+    observedFiles: autoGitSyncObservedPaths.size,
+    startupIgnoredFiles: autoGitSyncStartupDirtyPaths.size,
+    intervalMs: AUTO_GIT_SYNC_INTERVAL_MS,
+    stabilityWindowMs: AUTO_GIT_SYNC_STABLE_MS,
+    lastWarning: autoGitSyncLastWarning ? 'Synchronizacja zgłosiła błąd; sprawdź logi serwera.' : null,
+    lastWarningAt: autoGitSyncLastWarningAt ? new Date(autoGitSyncLastWarningAt).toISOString() : null,
+  });
+});
+
 async function startAutoGitSync(): Promise<void> {
   try {
     // Zmiany istniejące przed startem także muszą zostać zsynchronizowane po stabilizacji.
