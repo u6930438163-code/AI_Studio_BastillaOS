@@ -20,22 +20,24 @@ jobs:
           python3 -m py_compile integrations/mcp/server.py integrations/mcp/cloudrun.py integrations/mcp/smoke_test.py integrations/mcp/healthcheck.py
       - name: Build MCP container
         run: docker build -f integrations/mcp/Dockerfile.cloudrun -t bastilla-mcp:test .
-      - name: Verify MCP HTTP initialization
+      - name: Install MCP protocol test client
+        run: |
+          python3 -m venv /tmp/bastilla-mcp-ci
+          /tmp/bastilla-mcp-ci/bin/pip install -r integrations/mcp/requirements.txt
+      - name: Verify real MCP session and tool discovery
         shell: bash
         run: |
           set -euo pipefail
-          docker run -d --name bastilla-mcp-test -p 127.0.0.1:18080:8080 -e BASTILLA_API_URL=http://127.0.0.1:3902 bastilla-mcp:test
+          docker run -d --name bastilla-mcp-test -p 127.0.0.1:18080:8080 \
+            -e BASTILLA_API_URL=http://127.0.0.1:3902 bastilla-mcp:test
           trap 'docker logs bastilla-mcp-test || true; docker rm -f bastilla-mcp-test || true' EXIT
+          export BASTILLA_MCP_URL=http://127.0.0.1:18080/mcp/
           for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error --output /tmp/mcp-response.json --max-time 2 \
-              -H 'Content-Type: application/json' \
-              -H 'Accept: application/json, text/event-stream' \
-              -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"github-ci","version":"1.0"}}}' \
-              http://127.0.0.1:18080/mcp/; then
-              if python3 -c 'import json; r=json.load(open("/tmp/mcp-response.json")); assert r["jsonrpc"]=="2.0" and r["result"]["serverInfo"]["name"]; print("MCP initialization: PASS")'; then
-                exit 0
-              fi
+            if /tmp/bastilla-mcp-ci/bin/python integrations/mcp/healthcheck.py; then
+              echo "### MCP session handshake and tool discovery: PASS" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
             fi
             sleep 2
           done
+          echo "### MCP session handshake and tool discovery: FAIL" >> "$GITHUB_STEP_SUMMARY"
           exit 1
