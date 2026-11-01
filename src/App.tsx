@@ -30,6 +30,7 @@ import { FileExplorer } from './components/FileExplorer';
 import { AppsStudioView } from './components/AppsStudioView';
 import { WithoutNlpView } from './components/WithoutNlpView';
 import { GitHubExportView } from './components/GitHubExportView';
+import { CloudLibraryView } from './components/CloudLibraryView';
 import { BastillaDashboard } from './components/BastillaDashboard';
 import {
   AstyriaMissionAction,
@@ -634,6 +635,8 @@ export default function App() {
           {activeTab === 'without_nlp' && (
             <WithoutNlpView onSendProtocol={handleSendProtocol} />
           )}
+
+          {activeTab === 'cloud_library' && <CloudLibraryView />}
 
           {activeTab === 'github' && (
             <GitHubExportView />
