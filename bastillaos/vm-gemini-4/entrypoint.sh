@@ -72,7 +72,7 @@ if [ ! -s "$DISK_IMAGE" ]; then
   qemu-img create -f qcow2 -F qcow2 -b "$BASE_IMAGE" "$DISK_IMAGE" 20G
 fi
 
-if [ -e /dev/kvm ]; then
+if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
   accel="kvm"
   cpu="host"
 else
