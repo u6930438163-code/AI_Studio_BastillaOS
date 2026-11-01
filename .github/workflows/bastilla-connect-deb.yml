@@ -1,0 +1,43 @@
+name: BastillaOS Connect Debian package
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/bastilla-connect/**'
+      - 'integrations/mcp/client.py'
+      - 'integrations/mcp/requirements.txt'
+      - 'tests/test_bastilla_connect.py'
+      - '.github/workflows/bastilla-connect-deb.yml'
+permissions:
+  contents: read
+jobs:
+  deb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip dpkg-dev
+      - name: Static and unit tests
+        run: |
+          bash -n packaging/bastilla-connect/build-deb.sh packaging/bastilla-connect/bastilla-connect
+          python3 -m unittest discover -s tests -p 'test_bastilla_connect.py' -v
+      - name: Build Debian package
+        run: bash packaging/bastilla-connect/build-deb.sh
+      - name: Inspect and install package
+        run: |
+          set -euo pipefail
+          dpkg-deb --info dist/bastilla-connect_*.deb
+          sudo apt-get install -y ./dist/bastilla-connect_*.deb
+          bastilla-connect check
+          /usr/bin/python3 -c 'import sys; sys.path.insert(0, "/opt/bastilla-connect/vendor"); import mcp, httpx; print("MCP dependencies OK")'
+          systemctl cat bastilla-connect.service bastilla-connect.timer
+          echo '### BastillaOS Connect' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Package installed and local smoke test passed. Remote MCP connectivity was not tested.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload installable Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bastilla-connect-deb
+          path: dist/bastilla-connect_*.deb
+          if-no-files-found: error
