@@ -5871,6 +5871,8 @@ async function bootstrapTriadMission() {
         operator_root_scope: 'SUPREME_UNLIMITED_ABOVE_TRIADA',
         chat_exec: 'ENABLED_ROOT_UNLIMITED',
         chat_approvals: 'ENABLED_MANUAL_APPROVAL',
+        privileged_actions_require_operator_approval: true,
+        privileged_actions_audit_enabled: true,
         nlp_chain: 'OPENROUTER → FALLBACK_API (Groq/xAI) → LOCAL_NLP_ENGINE',
         update_sources: ['github.com (origin/main + api.github.com)', 'registry npm (npmjs.com)'],
         github_permissions: 'FULL_READ_WRITE',
