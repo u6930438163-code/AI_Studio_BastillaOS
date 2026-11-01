@@ -2,6 +2,11 @@
 # Read-only diagnostics for BastillaOS in Codespaces. No credentials or private keys printed.
 set -uo pipefail
 cd "$(dirname "$0")/.."
+PORT="${PORT:-3000}"
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  echo "Invalid PORT; expected an integer from 1 to 65535" >&2
+  exit 2
+fi
 failures=0
 check() {
   local name="$1"
@@ -33,8 +38,8 @@ check_json_endpoint() {
     });
   ' "$required_key"
 }
-check 'BastillaOS HTTP metrics JSON (port 3000)' check_json_endpoint http://127.0.0.1:3000/api/system/metrics cpuPercent
-check 'BastillaOS AI status JSON (port 3000)' check_json_endpoint http://127.0.0.1:3000/api/ai/status protocol
+check 'BastillaOS HTTP metrics JSON' check_json_endpoint "http://127.0.0.1:${PORT}/api/system/metrics" cpuPercent
+check 'BastillaOS AI status JSON' check_json_endpoint "http://127.0.0.1:${PORT}/api/ai/status" protocol
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   echo 'PASS Docker daemon accessible (optional for web app)'
 else
