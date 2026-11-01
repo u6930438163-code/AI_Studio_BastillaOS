@@ -531,9 +531,6 @@ export default function App() {
 
         <main id="main-content" className={`app-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden ${activeTab === 'comms' || activeTab === 'terminal' ? 'overflow-y-hidden' : 'overflow-y-auto'}`}>
           <React.Suspense fallback={<p role="status" className="p-4 text-sm text-cyan-200">Wczytywanie modułu…</p>}>
-          {activeTab === 'home' && <SystemResourceMeters />}
-          {activeTab === 'home' && <OllamaModelManager />}
-          {activeTab === 'home' && <BackgroundAgentsStatus />}
 
           {activeTab === 'home' && (
             <BastillaDashboard
