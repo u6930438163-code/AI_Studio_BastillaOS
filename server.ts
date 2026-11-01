@@ -343,7 +343,7 @@ function loadGitHubCredentials(): { username?: string; repoName?: string; token?
       return JSON.parse(fs.readFileSync(GITHUB_CRED_PATH, 'utf-8'));
     }
   } catch {}
-  return { username: 'u6930438163-code', repoName: 'SVL_Kernel' };
+  return { username: 'u6930438163-code', repoName: 'AI_Studio_BastillaOS' };
 }
 
 function saveGitHubCredentials(username: string, repoName: string, token: string) {
@@ -371,7 +371,7 @@ app.get('/api/github/status', (_req, res) => {
   const creds = loadGitHubCredentials();
   return res.json({
     username: creds.username || 'u6930438163-code',
-    repoName: creds.repoName || 'SVL_Kernel',
+    repoName: creds.repoName || 'AI_Studio_BastillaOS',
     hasToken: Boolean(creds.token),
     maskedToken: creds.token ? `${creds.token.slice(0, 6)}...` : '',
     syncedModules: getSyncedModulesList()
@@ -422,7 +422,8 @@ app.post('/api/github/export', async (req, res) => {
       await run(['remote', 'remove', 'origin']);
     } catch {}
     await run(['remote', 'add', 'origin', remoteUrl]);
-    await run(['push', '-u', 'origin', 'main', '--force']);
+    // Never overwrite remote history during a normal sync.
+    await run(['push', '-u', 'origin', 'main']);
 
     pushSystemLog('info', 'INFRA', `[GITHUB] System wyeksportowany do repozytorium ${username}/${safeRepo}.`);
     res.json({
@@ -439,7 +440,7 @@ app.post('/api/github/export', async (req, res) => {
 app.post('/api/github/pull', async (req, res) => {
   const saved = loadGitHubCredentials();
   const username = (req.body.username || saved.username || 'u6930438163-code').trim();
-  const repoName = (req.body.repoName || saved.repoName || 'SVL_Kernel').trim();
+  const repoName = (req.body.repoName || saved.repoName || 'AI_Studio_BastillaOS').trim();
   const token = (req.body.token || saved.token || '').trim();
 
   if (token) {
