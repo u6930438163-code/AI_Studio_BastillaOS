@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   DataStore,
   INITIAL_DATA_STORE,
@@ -57,7 +57,8 @@ export default function App() {
     return INITIAL_DATA_STORE;
   });
 
-  const dataStore = normalizeDataStore(rawDataStore);
+  // Avoid rebuilding the entire store on every UI render (typing, tabs, loading states).
+  const dataStore = useMemo(() => normalizeDataStore(rawDataStore), [rawDataStore]);
 
   const setDataStore: React.Dispatch<React.SetStateAction<DataStore>> = useCallback((updater) => {
     setRawDataStore((prev) => {
