@@ -5,7 +5,7 @@ IMAGE_NAME="debian-13-genericcloud-amd64.qcow2"
 IMAGE_BASE_URL="https://cloud.debian.org/images/cloud/trixie/latest"
 BASE_IMAGE="/data/${IMAGE_NAME}"
 CHECKSUM_FILE="/tmp/SHA512SUMS"
-IMAGE_TEMP="/tmp/${IMAGE_NAME}"
+IMAGE_TEMP="/data/.${IMAGE_NAME}.download"
 SSH_KEY="/data/id_ed25519"
 USER_DATA="/tmp/user-data"
 META_DATA="/tmp/meta-data"
@@ -26,10 +26,12 @@ if [ ! -s "$BASE_IMAGE" ]; then
     echo "Official Debian image checksum has an unexpected length." >&2
     exit 1
   fi
+  trap 'rm -f "$IMAGE_TEMP"' EXIT HUP INT TERM
   curl --fail --location --retry 3 --silent --show-error \
     "${IMAGE_BASE_URL}/${IMAGE_NAME}" --output "$IMAGE_TEMP"
   printf '%s  %s\n' "$expected_checksum" "$IMAGE_TEMP" | sha512sum --check --status
   mv "$IMAGE_TEMP" "$BASE_IMAGE"
+  trap - EXIT HUP INT TERM
 fi
 
 if [ ! -s "$SSH_KEY" ]; then
