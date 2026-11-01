@@ -280,6 +280,47 @@ app.get('/api/ollama/models', async (_req, res) => {
   }
 });
 
+// Background agent supervision: lightweight, read-only health checks.
+// No unattended shell commands, repository changes, or paid inference calls.
+const backgroundAgents = ['Aria', 'Astyria', 'Alex', 'Aurelius'] as const;
+type BackgroundAgent = typeof backgroundAgents[number];
+const agentBackgroundState: Record<BackgroundAgent, { enabled: boolean; lastCheck: string | null; status: 'waiting' | 'online' | 'offline'; error: string | null }> =
+  Object.fromEntries(backgroundAgents.map(name => [name, { enabled: true, lastCheck: null, status: 'waiting', error: null }])) as any;
+let backgroundAgentCheckRunning = false;
+async function checkBackgroundAgents() {
+  if (backgroundAgentCheckRunning) return;
+  backgroundAgentCheckRunning = true;
+  try {
+    const base = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\\/+$/, '');
+    const response = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(4000) });
+    if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
+    const now = new Date().toISOString();
+    for (const agent of backgroundAgents) {
+      if (!agentBackgroundState[agent].enabled) continue;
+      agentBackgroundState[agent] = { enabled: true, lastCheck: now, status: 'online', error: null };
+    }
+  } catch (error) {
+    const now = new Date().toISOString();
+    for (const agent of backgroundAgents) {
+      if (!agentBackgroundState[agent].enabled) continue;
+      agentBackgroundState[agent] = {
+        enabled: true, lastCheck: now, status: 'offline',
+        error: error instanceof Error ? error.message : 'Brak połączenia',
+      };
+    }
+  } finally {
+    backgroundAgentCheckRunning = false;
+  }
+}
+void checkBackgroundAgents();
+const backgroundAgentTimer = setInterval(() => { void checkBackgroundAgents(); }, 15000);
+backgroundAgentTimer.unref();
+app.get('/api/agents/background/status', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ monitoring: true, intervalMs: 15000, agents: agentBackgroundState,
+    note: 'Status połączenia Ollama, nie potwierdzenie aktywnej inferencji poszczególnych agentów.' });
+});
+
 const EXPORTS_DIR = path.resolve('exports');
 if (!fs.existsSync(EXPORTS_DIR)) {
   fs.mkdirSync(EXPORTS_DIR, { recursive: true });
