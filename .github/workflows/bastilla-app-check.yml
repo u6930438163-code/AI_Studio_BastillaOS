@@ -14,6 +14,7 @@ on:
       - 'bastillaos/vm-gemini-4/**'
       - '.devcontainer/**'
       - 'scripts/start-codespaces.sh'
+      - 'scripts/check-codespaces.sh'
       - 'scripts/auto-start-vm.sh'
       - 'scripts/keep-alive.sh'
   pull_request:
@@ -21,6 +22,7 @@ on:
       - 'bastillaos/vm-gemini-4/**'
       - '.devcontainer/**'
       - 'scripts/start-codespaces.sh'
+      - 'scripts/check-codespaces.sh'
       - 'scripts/auto-start-vm.sh'
       - 'scripts/keep-alive.sh'
       - 'src/**'
@@ -55,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           sh -n bastillaos/vm-gemini-4/entrypoint.sh
-          bash -n scripts/start-codespaces.sh scripts/auto-start-vm.sh scripts/keep-alive.sh
+          bash -n scripts/start-codespaces.sh scripts/check-codespaces.sh scripts/auto-start-vm.sh scripts/keep-alive.sh
           node -e 'const c=require("./.devcontainer/devcontainer.json"); if(!c.forwardPorts.includes(3000)) process.exit(1)'
           mkdir -p bastillaos/vm-gemini-4/data
           VM_UID="$(id -u)" VM_GID="$(id -g)" docker compose \
