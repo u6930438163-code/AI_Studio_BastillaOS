@@ -55,24 +55,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          timeout --signal=TERM 600s qemu-system-x86_64 \
+          : > boot.log
+          qemu-system-x86_64 \
             -machine q35,accel=tcg -cpu max -smp 2 -m 2048 \
             -drive file=debian13.qcow2,format=qcow2,if=virtio,snapshot=on \
             -drive file=seed.img,format=raw,if=virtio,readonly=on \
             -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
-            -display none -serial file:boot.log -monitor none -no-reboot || code=$?
-          echo "QEMU exit code: ${code:-0}"
+            -display none -serial file:boot.log -monitor none -no-reboot &
+          qemu_pid=$!
+          trap 'kill "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 120); do
+            if grep -Fq 'BASTILLA_DEBIAN13_GUEST_READY' boot.log; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "FAIL: QEMU process exited before readiness"
+              break
+            fi
+            sleep 5
+          done
           echo "### BastillaOS Debian 13 boot test" >> "$GITHUB_STEP_SUMMARY"
-          echo "- QEMU exit code: ${code:-0}" >> "$GITHUB_STEP_SUMMARY"
           tail -n 100 boot.log || true
-          if [[ "${code:-0}" != "0" && "${code:-0}" != "124" ]]; then
-            echo "FAIL: QEMU terminated unexpectedly"; exit 1
-          fi
-          if grep -Fq 'BASTILLA_DEBIAN13_GUEST_READY' boot.log; then
-            echo "PASS: cloud-init completed guest readiness command"
+          if [[ "$ready" == 1 ]]; then
+            echo "PASS: cloud-init guest readiness marker detected"
             echo "- Guest cloud-init readiness: PASS" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "FAIL: guest readiness marker not found in serial output"
+            echo "FAIL: guest readiness marker not found within 10 minutes"
             echo "- Guest cloud-init readiness: FAIL" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
