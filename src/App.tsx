@@ -31,6 +31,7 @@ import { AppsStudioView } from './components/AppsStudioView';
 import { WithoutNlpView } from './components/WithoutNlpView';
 import { GitHubExportView } from './components/GitHubExportView';
 import { CloudLibraryView } from './components/CloudLibraryView';
+import { IntegrationsView } from './components/IntegrationsView';
 import { BastillaDashboard } from './components/BastillaDashboard';
 import {
   AstyriaMissionAction,
@@ -635,6 +636,8 @@ export default function App() {
           {activeTab === 'without_nlp' && (
             <WithoutNlpView onSendProtocol={handleSendProtocol} />
           )}
+
+          {activeTab === 'integrations' && <IntegrationsView onOpenLibrary={() => setActiveTab('cloud_library')} />}
 
           {activeTab === 'cloud_library' && <CloudLibraryView />}
 
