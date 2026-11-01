@@ -54,11 +54,12 @@ jobs:
             echo "FAIL: QEMU terminated unexpectedly"; exit 1
           fi
           if grep -Eiq 'Debian GNU/Linux 13|Debian GNU/Linux trixie|Debian GNU/Linux.*trixie' boot.log; then
-            echo "PASS: Debian 13 reached serial boot output"
-            echo "- Debian 13 serial boot: PASS" >> "$GITHUB_STEP_SUMMARY"
+            echo "PASS: Debian 13 identification found in serial boot output (guest readiness not proven)"
+            echo "- Debian 13 identification in serial output: PASS" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Guest login/application readiness: NOT VERIFIED" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "FAIL: Debian 13 boot not confirmed"
-            echo "- Debian 13 serial boot: FAIL" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Debian 13 identification in serial output: FAIL" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
       - uses: actions/upload-artifact@v4
