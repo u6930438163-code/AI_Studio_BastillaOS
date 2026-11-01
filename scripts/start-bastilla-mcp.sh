@@ -41,7 +41,7 @@ if wait_http "${OLLAMA_BASE_URL%/}/api/tags" 15; then
 else
   report "WARNING: Ollama API OFFLINE; MCP diagnostics will show connected=false."
 fi
-if [[ ! -d node_modules ]]; then report "Installing npm dependencies..."; npm ci; fi
+if [[ ! -x node_modules/.bin/tsx ]]; then report "Installing npm dependencies..."; npm ci; fi
 if curl -fsS --max-time 2 "${BASTILLA_API_URL%/}/api/ai/status" >/dev/null 2>&1; then
   report "BastillaOS API already online: ${BASTILLA_API_URL}"
 else
@@ -55,6 +55,10 @@ else
 fi
 if [[ ! -x "$VENV/bin/python" ]]; then python3 -m venv "$VENV"; fi
 "$VENV/bin/python" -m pip install -q -r integrations/mcp/requirements.txt
+if (echo >/dev/tcp/127.0.0.1/8000) >/dev/null 2>&1; then
+  report "ERROR: Port 8000 is already in use. Stop the existing service before starting a new MCP bridge."
+  exit 1
+fi
 report "Starting loopback-only MCP bridge on port 8000"
 "$VENV/bin/python" integrations/mcp/server.py >.runtime/mcp.log 2>&1 &
 pids+=("$!")
