@@ -6,6 +6,11 @@ on:
     paths:
       - '.github/workflows/debian13-tcg-boot.yml'
       - 'scripts/check-virtualization.sh'
+permissions:
+  contents: read
+concurrency:
+  group: bastilla-debian13-tcg-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   debian13-boot:
     runs-on: ubuntu-latest
@@ -21,8 +26,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 3 --connect-timeout 30 -o debian13.qcow2 \
-            https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
+          base=https://cloud.debian.org/images/cloud/trixie/latest
+          image=debian-13-generic-amd64.qcow2
+          curl -fL --retry 3 --connect-timeout 30 -o debian13.qcow2 "$base/$image"
+          curl -fL --retry 3 --connect-timeout 30 -o SHA512SUMS "$base/SHA512SUMS"
+          expected=$(awk -v image="$image" '$2 == image || $2 == "*" image {print $1; exit}' SHA512SUMS)
+          if [[ ! "$expected" =~ ^[0-9a-fA-F]{128}$ ]]; then
+            echo "FAIL: Official checksum not found for $image"; exit 1
+          fi
+          printf '%s  %s\n' "$expected" debian13.qcow2 | sha512sum --check --status
+          echo "PASS: Official Debian 13 image SHA-512 checksum verified"
           qemu-img info debian13.qcow2
       - name: Boot Debian 13 with software emulation
         shell: bash
