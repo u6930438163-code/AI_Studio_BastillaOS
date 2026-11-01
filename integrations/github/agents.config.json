@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "repository": "u6930438163-code/AI_Studio_BastillaOS",
+  "defaultBranch": "main",
+  "agents": [
+    {
+      "id": "si_1",
+      "name": "Aria",
+      "role": "coordinator"
+    },
+    {
+      "id": "alex",
+      "name": "Alex",
+      "role": "development"
+    },
+    {
+      "id": "astyria",
+      "name": "Astyria",
+      "role": "quality"
+    },
+    {
+      "id": "aurelius",
+      "name": "Aurelius",
+      "role": "review"
+    }
+  ],
+  "github": {
+    "mode": "pull-request-only",
+    "directPushToMain": false,
+    "autoMerge": false,
+    "allowedActions": [
+      "read_repository",
+      "create_issue",
+      "create_branch",
+      "create_pull_request",
+      "comment_on_pull_request"
+    ],
+    "requireHumanReview": true
+  },
+  "authentication": {
+    "method": "github-app-installation-token",
+    "secretEnvironmentVariable": "BASTILLA_GITHUB_APP_TOKEN",
+    "neverExposeTokenToAgents": true
+  },
+  "runtime": {
+    "status": "not-connected",
+    "webhookEndpoint": "/api/integrations/github/webhook",
+    "webhookImplemented": false
+  }
+}
