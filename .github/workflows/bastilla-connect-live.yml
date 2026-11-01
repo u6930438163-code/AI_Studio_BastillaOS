@@ -25,13 +25,12 @@ jobs:
       fail-fast: false
       matrix:
         target: [dev, pre]
-    if: github.event_name != 'workflow_dispatch' || matrix.target == inputs.target
     steps:
       - uses: actions/checkout@v4
       - name: Verify selected deployment API
         shell: bash
         env:
-          TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.target || matrix.target }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           case "$TARGET" in
