@@ -6127,7 +6127,7 @@ app.get('/api/mcp/openapi.json', (req, res) => {
 app.all(['/api/mcp', '/mcp'], async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, MCP-Protocol-Version, Mcp-Session-Id');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -6140,17 +6140,22 @@ app.all(['/api/mcp', '/mcp'], async (req, res) => {
       version: '1.0.0',
       description: 'BastillaOS Astyria Model Context Protocol (MCP) Server dla ChatGPT i agentów AI',
       endpoints: {
-        mcp: `${origin}/api/mcp`,
-        sse: `${origin}/api/mcp/sse`,
-        openapi: `${origin}/api/mcp/openapi.json`,
+        mcp: '/api/mcp',
+        sse: '/api/mcp/sse',
+        openapi: '/api/mcp/openapi.json',
       },
       tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
     });
   }
 
   const { jsonrpc, id, method, params } = req.body || {};
-  if (jsonrpc !== '2.0' && !method) {
+  if (jsonrpc !== '2.0' || typeof method !== 'string') {
     return res.status(400).json({ jsonrpc: '2.0', id: id ?? null, error: { code: -32600, message: 'Invalid Request: expected JSON-RPC 2.0' } });
+  }
+
+  if (id === undefined) {
+    if (method.startsWith('notifications/')) return res.status(202).end();
+    return res.status(400).json({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Request id required' } });
   }
 
   try {
@@ -6160,7 +6165,7 @@ app.all(['/api/mcp', '/mcp'], async (req, res) => {
           jsonrpc: '2.0',
           id,
           result: {
-            protocolVersion: '2024-11-05',
+            protocolVersion: ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'].includes(params?.protocolVersion) ? params.protocolVersion : '2025-03-26',
             serverInfo: {
               name: 'bastillaos-astyria-mcp',
               version: '1.0.0',
