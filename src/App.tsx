@@ -85,34 +85,45 @@ export default function App() {
     isAgentLoadingRef.current = isAgentLoading;
   }, [isAgentLoading]);
 
-  // Periodic live sync with real Python SVL Kernel on disk
+  // Poll only while visible, prevent overlapping requests, and cancel on unmount.
+  // This reduces CPU/network use on mobile and prevents stale responses after navigation.
   useEffect(() => {
-    let isMounted = true;
+    let disposed = false;
+    let inFlight = false;
+    let controller: AbortController | null = null;
     const fetchState = async () => {
-      if (isAgentLoadingRef.current) return;
+      if (disposed || inFlight || document.hidden || isAgentLoadingRef.current) return;
+      inFlight = true;
+      controller = new AbortController();
       try {
-        const res = await fetch('/api/kernel/state');
-        if (res.ok && isMounted && !isAgentLoadingRef.current) {
-          const data = await res.json();
-          if (data && data.store && !isAgentLoadingRef.current) {
-            const incomingStore = normalizeDataStore(data.store);
-            setDataStore((prev) =>
-              // Adopt any difference (chat, config, update history, apps…) so chat-driven
-              // changes are reflected immediately, not only version/chat-length bumps.
-              JSON.stringify(prev) === JSON.stringify(incomingStore) ? prev : incomingStore
-            );
-          }
+        const res = await fetch('/api/kernel/state', { signal: controller.signal });
+        if (!res.ok || disposed || isAgentLoadingRef.current) return;
+        const data = await res.json();
+        if (!disposed && data?.store && !isAgentLoadingRef.current) {
+          const incomingStore = normalizeDataStore(data.store);
+          setDataStore((prev) =>
+            JSON.stringify(prev) === JSON.stringify(incomingStore) ? prev : incomingStore
+          );
         }
       } catch (err) {
-        // quiet error
+        if (!(err instanceof Error && err.name === 'AbortError')) {
+          console.warn('Kernel state polling failed:', err);
+        }
+      } finally {
+        inFlight = false;
+        controller = null;
       }
     };
 
-    fetchState();
-    const interval = setInterval(fetchState, 4000);
+    void fetchState();
+    const interval = setInterval(() => { void fetchState(); }, 4000);
+    const onVisible = () => { if (!document.hidden) void fetchState(); };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
-      isMounted = false;
+      disposed = true;
+      controller?.abort();
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [setDataStore]);
 
