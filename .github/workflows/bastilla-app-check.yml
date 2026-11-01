@@ -40,6 +40,39 @@ jobs:
         run: npm test
       - name: Production frontend build
         run: npm run build
+      - name: HTTP startup smoke test
+        shell: bash
+        env:
+          NODE_ENV: production
+          PORT: '3901'
+        run: |
+          set -euo pipefail
+          npm run start > /tmp/bastilla-http.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 45); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:3901/api/system/metrics > /tmp/bastilla-metrics.json; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          if [[ "$ready" != 1 ]]; then
+            tail -n 100 /tmp/bastilla-http.log || true
+            echo 'HTTP startup test failed' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          node -e 'const x=require("/tmp/bastilla-metrics.json"); if(typeof x.cpuPercent!=="number") process.exit(1); console.log("Metrics endpoint OK")'
+          echo 'HTTP /api/system/metrics: PASS' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload startup logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bastilla-http-startup-log
+          path: /tmp/bastilla-http.log
+          if-no-files-found: ignore
       - name: Verification summary
         if: always()
         run: |
