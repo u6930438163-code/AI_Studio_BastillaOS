@@ -70,7 +70,8 @@ if ! "$VENV/bin/python" integrations/mcp/smoke_test.py; then
   report "ERROR: MCP smoke test failed; see .runtime/mcp.log"
   exit 1
 fi
-report "MCP OK (local): http://127.0.0.1:8000/mcp"
+report "MCP OK (local): http://127.0.0.1:8000/mcp/"
+report "Codespaces port 8000 must remain PRIVATE. ChatGPT cannot connect directly to a private Codespaces port."
 report "Ollama diagnostics:"
 curl -fsS --max-time 10 "${BASTILLA_API_URL%/}/api/ollama/models" || true
 printf '\n'
