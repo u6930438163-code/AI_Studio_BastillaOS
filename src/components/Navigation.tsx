@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, MessagesSquare, FileCode2, Database, History, Activity, Cpu, GitBranch, Clock, Sigma, FolderOpen, HardDrive, LayoutGrid, Brain, Github, Home, ClipboardCheck, Radio, Plug } from 'lucide-react';
+import { Terminal, MessagesSquare, FileCode2, Database, History, Activity, Cpu, GitBranch, Clock, Sigma, FolderOpen, HardDrive, LayoutGrid, Brain, Github, Home, ClipboardCheck, Radio, Plug, Images } from 'lucide-react';
 
 export type TabId =
   | 'home'
@@ -19,12 +19,13 @@ export type TabId =
   | 'hyper_com'
   | 'without_nlp'
   | 'github'
-  | 'gpt_actions';
+  | 'gpt_actions'
+  | 'cloud_sync';
 
 export const TAB_IDS: readonly TabId[] = [
   'home', 'comms', 'approvals', 'process_matrix', 'astyria_mission', 'schema_graph', 'temporal',
   'terminal', 'monolith', 'datastore', 'diagnostics', 'visualizer', 'file_explorer',
-  'apps', 'hyper_com', 'without_nlp', 'github', 'gpt_actions',
+  'apps', 'hyper_com', 'without_nlp', 'github', 'gpt_actions', 'cloud_sync',
 ];
 
 /** Widok startowy z adresu, np. /?view=without_nlp (launchery KDE w BastillaOS). */
@@ -152,6 +153,12 @@ export const Navigation: React.FC<NavigationProps> = ({
       label: 'Połączenie ChatGPT',
       icon: Plug,
       badge: 'API'
+    },
+    {
+      id: 'cloud_sync' as TabId,
+      label: 'Zdjęcia i Notatki',
+      icon: Images,
+      badge: 'IMPORT'
     },
     {
       id: 'github' as TabId,
