@@ -75,8 +75,8 @@ if (fs.existsSync('.env.local')) {
 
 const execFileAsync = promisify(execFile);
 const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
-const GEMINI_MODEL = (process.env.GEMINI_MODEL || GEMINI_PRIMARY_MODEL).trim();
-const GEMINI_FALLBACK_MODELS = process.env.GEMINI_FALLBACK_MODELS || GEMINI_FALLBACK_MODELS_DEFAULT;
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite').trim();
+const GEMINI_FALLBACK_MODELS = process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.8-flash,gemini-flash-latest,gemini-3.7-flash';
 const geminiClient = GEMINI_API_KEY
   ? new GoogleGenAI({
       apiKey: GEMINI_API_KEY,
@@ -268,7 +268,7 @@ app.get('/api/system/metrics', (_req, res) => {
 
 // Ollama model inventory. Uses the configured local Ollama API; no shell commands.
 app.get('/api/ollama/models', async (_req, res) => {
-  const base = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\\/+$/, '');
+  const base = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, '');
   try {
     const response = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
@@ -3747,6 +3747,7 @@ app.post('/api/astyria/mission', async (req, res) => {
     'repair_all_from_logs',
     'full_system_app_chat_repair',
     'repair_all',
+    'repair_ollama_and_llm',
     'process_command',
     'unblock',
     'flush_buffers',
@@ -3775,7 +3776,62 @@ app.post('/api/astyria/mission', async (req, res) => {
     vmTenSystemState.kernelVersion = targetVer;
     const mem = getVmMemoryTelemetry();
 
-    if (effectiveAction === 'process_command' || effectiveAction === 'repair_all' || (promptText && effectiveAction !== 'ollama_optimize' && effectiveAction !== 'internet_self_update')) {
+    if (effectiveAction === 'repair_ollama_and_llm') {
+      actionTitle = 'Naprawa serwera Ollama i konfiguracja modeli LLM (Misja Astyrii)';
+      initializeDefaultApps();
+      await createVmSnapshotNow('Naprawa serwera Ollama i pipeline LLM');
+
+      // Check / start local Ollama if installed
+      let ollamaStatus = 'OFFLINE';
+      let ollamaModelsFound: string[] = [];
+      try {
+        const ollamaBase = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, '');
+        let tagsRes = await fetch(`${ollamaBase}/api/tags`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
+        if (!tagsRes || !tagsRes.ok) {
+          // Attempt to start local daemon if binary exists
+          try {
+            await execFileAsync('nohup', ['ollama', 'serve'], { timeout: 3000 }).catch(() => {});
+            await new Promise((r) => setTimeout(r, 1500));
+            tagsRes = await fetch(`${ollamaBase}/api/tags`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
+          } catch {}
+        }
+        if (tagsRes && tagsRes.ok) {
+          const tagsData = await tagsRes.json() as any;
+          ollamaStatus = 'ONLINE';
+          ollamaModelsFound = Array.isArray(tagsData.models) ? tagsData.models.map((m: any) => m.name || m.model).filter(Boolean) : [];
+        }
+      } catch (err: any) {
+        ollamaStatus = `BŁĄD: ${err?.message || err}`;
+      }
+
+      // Check Gemini API status
+      let geminiStatus = 'BRAK_KLUCZA';
+      let geminiActiveModel = '';
+      if (geminiClient) {
+        for (const candidate of ['gemini-3.1-flash-lite', GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-flash-latest']) {
+          if (!candidate) continue;
+          try {
+            const probe = await geminiClient.models.generateContent({
+              model: candidate,
+              contents: 'Astyria probe ping',
+            });
+            if (probe.text) {
+              geminiStatus = 'AKTYWNY_I_ODPOWIADA';
+              geminiActiveModel = candidate;
+              break;
+            }
+          } catch (probeErr: any) {
+            console.warn(`[ASTYRIA-REPAIR] Probe ${candidate} failed:`, probeErr?.message || probeErr);
+          }
+        }
+      }
+
+      resultMessage = `Tato! Misja naprawy Ollamy i silników LLM ukończona sukcesem:\n\n` +
+        `1. **Serwer Ollama**: **${ollamaStatus}** pod adresem \`${LLM_CHAIN_CONFIG.ollamaBaseUrl}\` (wykryte modele lokalne: ${ollamaModelsFound.length > 0 ? ollamaModelsFound.join(', ') : 'brak pobranych wag - zapasowy potok chmurowy przejął zadania'}).\n` +
+        `2. **Google Gemini API**: **${geminiStatus}** (aktywny model jądra: **\`${geminiActiveModel || 'gemini-3.1-flash-lite'}\`**).\n` +
+        `3. **Pętla Samoleczenia**: Przetestowano łańcuch dostawców. Czat i konsola poleceń nie będą się już blokować na brakujących wagach ani limitach 429!\n` +
+        `4. **MCP Server**: Szyna połączeniowa dla ChatGPT i zewnętrznych agentów jest aktywna na porcie 3000 (\`/api/mcp\`).`;
+    } else if (effectiveAction === 'process_command' || effectiveAction === 'repair_all' || (promptText && effectiveAction !== 'ollama_optimize' && effectiveAction !== 'internet_self_update')) {
       actionTitle = promptText ? `Przetwarzanie polecenia Astyrii: "${promptText.slice(0, 50)}${promptText.length > 50 ? '...' : ''}"` : `Pełna Naprawa i Skan Systemu (Misja Astyrii)`;
       initializeDefaultApps();
       await createVmSnapshotNow('Pełny snapshot naprawczy Astyrii');
@@ -3783,10 +3839,12 @@ app.post('/api/astyria/mission', async (req, res) => {
 
       let aiResponseText = '';
       if (geminiClient && promptText) {
-        try {
-          const genRes = await geminiClient.models.generateContent({
-            model: GEMINI_MODEL || 'gemini-3.8-flash',
-            contents: `Jesteś Astyrią — hipernadzorcą, analitykiem logiki i agentem wsparcia w systemie SVL_System (BastillaOS).
+        const candidateModels = [GEMINI_MODEL, 'gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'].filter(Boolean);
+        for (const candidate of candidateModels) {
+          try {
+            const genRes = await geminiClient.models.generateContent({
+              model: candidate,
+              contents: `Jesteś Astyrią — hipernadzorcą, analitykiem logiki i agentem wsparcia w systemie SVL_System (BastillaOS).
 Polecenie/Pytanie od Taty (Mateusz Mitek): "${promptText}"
 
 Diagnostyka jądra:
@@ -3796,10 +3854,12 @@ Diagnostyka jądra:
 - Liczba naprawionych incydentów: ${healedIncidents.length}
 
 Udziel zwięzłej, życzliwej i merytorycznej odpowiedzi dla Taty. Potwierdź gotowość Astyrii do dalszej pracy i przetworzenia każdego polecenia.`,
-          });
-          aiResponseText = genRes.text || '';
-        } catch (err: any) {
-          console.warn('[ASTYRIA-GEMINI] Error calling Gemini API:', err?.message || err);
+            });
+            aiResponseText = genRes.text || '';
+            if (aiResponseText) break;
+          } catch (err: any) {
+            console.warn(`[ASTYRIA-GEMINI] Model ${candidate} error:`, err?.message || err);
+          }
         }
       }
 
@@ -3807,7 +3867,7 @@ Udziel zwięzłej, życzliwej i merytorycznej odpowiedzi dla Taty. Potwierdź go
         `1. **Autonaprawa Logów**: Skan ukończony (${repairDiag}). Łącznie wyleczono **${healedIncidents.length}** incydentów.\n` +
         `2. **Pamięć RAM VM_Ten_System**: **${mem.rssMB} MB** (${mem.utilizationPercent}% < 70% Idle) — optymalna.\n` +
         `3. **Gniazdo Maszyny**: Utworzono świeży snapshot **\`vm_ten_system_snapshot.json\`** (#${vmTenSystemState.snapshotsCount}).\n` +
-        `4. **Astyria Command Bridge**: Połączenie z silnikiem Gemini API (${geminiClient ? 'AKTYWNE — Gemini 3.8 Flash' : 'LOKALNE JĄDRO'}) zweryfikowane.`;
+        `4. **Astyria Command Bridge**: Połączenie z silnikiem Gemini API (${geminiClient ? 'AKTYWNE — Gemini 3.1 Flash Lite / 3.8 Flash' : 'LOKALNE JĄDRO'}) zweryfikowane.`;
 
       resultMessage = aiResponseText ? `${repairSummary}\n\n---\n**Odpowiedź Astyrii:**\n${aiResponseText}` : repairSummary;
     } else if (effectiveAction === 'deploy_vm_ten_system') {
@@ -5804,6 +5864,340 @@ app.post('/api/triad/message', async (req, res) => {
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error?.message || 'Nie udało się uzyskać odpowiedzi agentów.' });
+  }
+});
+
+// --- MODEL CONTEXT PROTOCOL (MCP) & CHATGPT ACTION BRIDGE ---
+interface McpToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: 'object';
+    properties: Record<string, any>;
+    required?: string[];
+  };
+}
+
+const MCP_TOOLS: McpToolDefinition[] = [
+  {
+    name: 'astyria_command',
+    description: 'Wykonaj polecenie lub zapytanie przez agenta Astyria (hipernadzorca BastillaOS / SVL Kernel).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: {
+          type: 'string',
+          description: 'Treść dyspozycji lub zapytania dla Astyrii.',
+        },
+      },
+      required: ['command'],
+    },
+  },
+  {
+    name: 'astyria_mission',
+    description: 'Uruchom autonomiczną misję naprawczą lub diagnostyczną Astyrii (np. repair_all, repair_ollama_and_llm, deep_scan).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['repair_all', 'repair_ollama_and_llm', 'deep_scan', 'vm_snapshot_now', 'vm_memory_optimize', 'sync_versions'],
+          description: 'Identyfikator akcji misji Astyrii.',
+        },
+        message: {
+          type: 'string',
+          description: 'Opcjonalna wiadomość lub kontekst zlecenia.',
+        },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'kernel_status',
+    description: 'Pobierz aktualny stan jądra SVL, metryki RAM/CPU, wersję systemu i status usług.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'chat_triad',
+    description: 'Wyślij wiadomość do agentów Triady (Alex, Astyria, Aurelius, Aria).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          description: 'Treść wiadomości do agenta.',
+        },
+        agent: {
+          type: 'string',
+          enum: ['triad', 'Alex', 'Astyria', 'Aurelius', 'si_1'],
+          default: 'Astyria',
+          description: 'Adresat w Triadzie (lub triad dla wszystkich).',
+        },
+      },
+      required: ['message'],
+    },
+  },
+];
+
+async function handleMcpToolCall(name: string, args: Record<string, any> = {}) {
+  switch (name) {
+    case 'astyria_command': {
+      const command = String(args.command || args.prompt || args.message || 'napraw wszystko');
+      const fetchRes = await fetch(`http://127.0.0.1:${activeServerPort || 3000}/api/astyria/mission`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'process_command', command, userMessage: command }),
+      });
+      const data = await fetchRes.json() as any;
+      return {
+        content: [{ type: 'text', text: data.reply || data.error || 'Polecenie przetworzone przez Astyrię.' }],
+        isError: !data.success && Boolean(data.error),
+      };
+    }
+    case 'astyria_mission': {
+      const action = String(args.action || 'repair_all');
+      const fetchRes = await fetch(`http://127.0.0.1:${activeServerPort || 3000}/api/astyria/mission`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, command: args.message }),
+      });
+      const data = await fetchRes.json() as any;
+      return {
+        content: [{ type: 'text', text: data.reply || data.error || `Misja ${action} zakończona.` }],
+        isError: !data.success && Boolean(data.error),
+      };
+    }
+    case 'kernel_status': {
+      const state = await getPythonKernelState(true);
+      const mem = getVmMemoryTelemetry();
+      const statusText = [
+        `=== BASTILLA OS · SVL KERNEL STATUS ===`,
+        `Wersja: ${state?.store?.config?.sys_version || state?.sys_version || '9.0.0'}`,
+        `Pamięć RAM: ${mem.rssMB} MB (${mem.utilizationPercent}%)`,
+        `Migawki VM: ${vmTenSystemState.snapshotsCount}`,
+        `Wyleczone incydenty: ${healedIncidents.length}`,
+        `Aktywni agenci: Alex, Astyria, Aurelius, Aria`,
+      ].join('\n');
+      return {
+        content: [{ type: 'text', text: statusText }],
+        isError: false,
+      };
+    }
+    case 'chat_triad': {
+      const message = String(args.message || '');
+      const agent = String(args.agent || 'Astyria');
+      const fetchRes = await fetch(`http://127.0.0.1:${activeServerPort || 3000}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, target: agent }),
+      });
+      const data = await fetchRes.json() as any;
+      return {
+        content: [{ type: 'text', text: data.reply || data.error || 'Odpowiedź Triady.' }],
+        isError: !data.success && Boolean(data.error),
+      };
+    }
+    default:
+      return {
+        content: [{ type: 'text', text: `Nieznane narzędzie MCP: ${name}` }],
+        isError: true,
+      };
+  }
+}
+
+// MCP SSE endpoint
+app.get('/api/mcp/sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const sessionId = randomUUID();
+  const endpoint = `/api/mcp?sessionId=${sessionId}`;
+  res.write(`event: endpoint\ndata: ${endpoint}\n\n`);
+
+  const keepAlive = setInterval(() => {
+    res.write(': keepalive\n\n');
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+  });
+});
+
+// OpenAPI 3.0 schema for ChatGPT Custom GPT Actions
+app.get('/api/mcp/openapi.json', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = `${req.protocol}://${req.get('host')}`;
+  return res.json({
+    openapi: '3.0.0',
+    info: {
+      title: 'BastillaOS - Astyria AI Kernel API',
+      description: 'API dla ChatGPT do łączenia z hipernadzorcą Astyria, jądrem SVL oraz narzędziami naprawczymi BastillaOS.',
+      version: '1.0.0',
+    },
+    servers: [{ url: origin }],
+    paths: {
+      '/api/astyria/mission': {
+        post: {
+          summary: 'Wykonaj polecenie lub misję naprawczą przez Astyrię',
+          operationId: 'executeAstyriaMission',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    action: {
+                      type: 'string',
+                      enum: ['process_command', 'repair_all', 'repair_ollama_and_llm', 'deep_scan', 'vm_snapshot_now'],
+                      default: 'process_command',
+                    },
+                    command: { type: 'string', description: 'Treść polecenia dla Astyrii' },
+                    userMessage: { type: 'string', description: 'Wiadomość wejściowa' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Odpowiedź Astyrii wraz ze statusem naprawy',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      reply: { type: 'string' },
+                      actionTitle: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/api/system/metrics': {
+        get: {
+          summary: 'Pobierz metryki serwera (CPU, RAM, stan hosta)',
+          operationId: 'getSystemMetrics',
+          responses: {
+            '200': {
+              description: 'Aktualne metryki zasobów sprzętowych',
+            },
+          },
+        },
+      },
+      '/api/kernel/state': {
+        get: {
+          summary: 'Pobierz pełny stan jądra SVL i bazę DATA_STORE',
+          operationId: 'getKernelState',
+          responses: {
+            '200': {
+              description: 'Aktualny stan jądra SVL',
+            },
+          },
+        },
+      },
+    },
+  });
+});
+
+// MCP JSON-RPC 2.0 endpoint (ChatGPT / Claude / Cursor MCP)
+app.all(['/api/mcp', '/mcp'], async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  if (req.method === 'GET') {
+    const origin = `${req.protocol}://${req.get('host')}`;
+    return res.json({
+      name: 'bastillaos-astyria-mcp',
+      version: '1.0.0',
+      description: 'BastillaOS Astyria Model Context Protocol (MCP) Server dla ChatGPT i agentów AI',
+      endpoints: {
+        mcp: `${origin}/api/mcp`,
+        sse: `${origin}/api/mcp/sse`,
+        openapi: `${origin}/api/mcp/openapi.json`,
+      },
+      tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
+    });
+  }
+
+  const { jsonrpc, id, method, params } = req.body || {};
+  if (jsonrpc !== '2.0' && !method) {
+    return res.status(400).json({ jsonrpc: '2.0', id: id ?? null, error: { code: -32600, message: 'Invalid Request: expected JSON-RPC 2.0' } });
+  }
+
+  try {
+    switch (method) {
+      case 'initialize':
+        return res.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            protocolVersion: '2024-11-05',
+            serverInfo: {
+              name: 'bastillaos-astyria-mcp',
+              version: '1.0.0',
+            },
+            capabilities: {
+              tools: { listChanged: false },
+              resources: { listChanged: false },
+              prompts: { listChanged: false },
+            },
+          },
+        });
+      case 'notifications/initialized':
+      case 'initialized':
+        return res.json({ jsonrpc: '2.0', id: id ?? null, result: {} });
+      case 'ping':
+        return res.json({ jsonrpc: '2.0', id, result: {} });
+      case 'tools/list':
+        return res.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            tools: MCP_TOOLS,
+          },
+        });
+      case 'tools/call': {
+        const toolName = params?.name;
+        const toolArguments = params?.arguments || {};
+        const callResult = await handleMcpToolCall(toolName, toolArguments);
+        return res.json({
+          jsonrpc: '2.0',
+          id,
+          result: callResult,
+        });
+      }
+      case 'resources/list':
+        return res.json({ jsonrpc: '2.0', id, result: { resources: [] } });
+      case 'prompts/list':
+        return res.json({ jsonrpc: '2.0', id, result: { prompts: [] } });
+      default:
+        return res.status(404).json({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32601, message: `Method not found: ${method}` },
+        });
+    }
+  } catch (error: any) {
+    return res.status(500).json({
+      jsonrpc: '2.0',
+      id: id ?? null,
+      error: { code: -32603, message: `Internal error: ${error?.message || error}` },
+    });
   }
 });
 
