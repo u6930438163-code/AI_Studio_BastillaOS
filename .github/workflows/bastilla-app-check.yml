@@ -66,6 +66,9 @@ jobs:
           fi
           node -e 'const x=require("/tmp/bastilla-metrics.json"); if(typeof x.cpuPercent!=="number") process.exit(1); console.log("Metrics endpoint OK")'
           echo 'HTTP /api/system/metrics: PASS' >> "$GITHUB_STEP_SUMMARY"
+          curl --fail --silent --show-error --max-time 5 http://127.0.0.1:3901/api/mcp/openapi.json > /tmp/bastilla-openapi.json
+          node -e 'const x=require("/tmp/bastilla-openapi.json"); if(x.openapi!=="3.0.0" || !x.paths || !x.paths["/api/astyria/mission"]) process.exit(1); console.log("MCP OpenAPI schema OK")'
+          echo 'HTTP /api/mcp/openapi.json: PASS (schema only)' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload startup logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
