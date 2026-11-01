@@ -3177,8 +3177,8 @@ const TRIADA_COMMIT_ALLOWED_ROOTS = [
 ];
 
 const TRIADA_DEFAULT_COMMIT_PATHS = [...TRIADA_COMMIT_ALLOWED_ROOTS];
-const AUTO_GIT_SYNC_INTERVAL_MS = 15_000;
-const AUTO_GIT_SYNC_STABLE_MS = 15_000;
+const AUTO_GIT_SYNC_INTERVAL_MS = 1_000;
+const AUTO_GIT_SYNC_STABLE_MS = 1_000;
 const autoGitSyncStartupDirtyPaths = new Set<string>();
 const autoGitSyncObservedPaths = new Map<string, { signature: string; firstSeen: number }>();
 let autoGitSyncEnabled = false;
