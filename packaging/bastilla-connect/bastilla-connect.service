@@ -5,6 +5,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+EnvironmentFile=-/etc/bastilla-connect/config.env
 User=nobody
 Group=nogroup
 ExecStart=/usr/bin/bastilla-connect check
