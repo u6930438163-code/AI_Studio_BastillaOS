@@ -13,7 +13,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/api/ollama/models":
-            self.respond(200, {"connected": False, "models": [], "mock": True})
+            self.respond(503, {"connected": False, "models": [], "mock": True})
         elif self.path == "/api/agents/background/status":
             self.respond(200, {
                 "monitoring": True,
