@@ -24,7 +24,12 @@ async def main():
                 raise RuntimeError("MCP agent_command returned a tool error")
             if not agent_result.content:
                 raise RuntimeError("MCP agent_command returned an empty response")
-            print("MCP handshake and both diagnostic tools: OK")
+            rejected = await session.call_tool(
+                "agent_command", {"agent": "triad", "command": "EXECUTE_SHELL"}
+            )
+            if not rejected.isError:
+                raise RuntimeError("MCP accepted an unsupported agent command")
+            print("MCP handshake, diagnostics and command allowlist: OK")
             print("Tools:", ", ".join(sorted(names)))
             print("Ollama diagnostic:", result)
             print("Agent diagnostic:", agent_result)
