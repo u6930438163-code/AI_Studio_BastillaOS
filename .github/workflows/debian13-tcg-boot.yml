@@ -1,0 +1,40 @@
+name: BastillaOS Debian 13 TCG boot verification
+on:
+  workflow_dispatch:
+jobs:
+  debian13-boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install emulator
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils
+      - name: Download official Debian 13 cloud image
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --connect-timeout 30 -o debian13.qcow2 \
+            https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
+          qemu-img info debian13.qcow2
+      - name: Boot Debian 13 with software emulation
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM 240s qemu-system-x86_64 \
+            -machine q35,accel=tcg -cpu max -smp 2 -m 2048 \
+            -drive file=debian13.qcow2,format=qcow2,if=virtio,snapshot=on \
+            -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
+            -display none -serial file:boot.log -monitor none -no-reboot || code=$?
+          echo "QEMU exit code: ${code:-0}"
+          tail -n 100 boot.log || true
+          if grep -Eiq 'Debian GNU/Linux 13|Debian GNU/Linux trixie|login:' boot.log; then
+            echo "PASS: Debian 13 reached serial boot output"
+          else
+            echo "FAIL: Debian 13 boot not confirmed"; exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debian13-tcg-boot-log
+          path: boot.log
+          if-no-files-found: ignore
