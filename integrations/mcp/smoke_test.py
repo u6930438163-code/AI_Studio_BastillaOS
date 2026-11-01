@@ -11,7 +11,7 @@ async def main():
             await session.initialize()
             tools = await session.list_tools()
             names = {tool.name for tool in tools.tools}
-            expected = {"ollama_status", "agents_status", "agent_command"}
+            expected = {"ollama_status", "agents_status", "vm_status", "agent_command"}
             assert expected <= names, f"Missing MCP tools: {expected - names}"
             result = await session.call_tool("ollama_status", {})
             if result.isError:
@@ -27,6 +27,9 @@ async def main():
             agents_result = await session.call_tool("agents_status", {})
             if agents_result.isError or not agents_result.content:
                 raise RuntimeError("MCP agents_status failed or returned an empty response")
+            vm_result = await session.call_tool("vm_status", {})
+            if vm_result.isError or not vm_result.content:
+                raise RuntimeError("MCP vm_status failed or returned an empty response")
             agent_result = await session.call_tool(
                 "agent_command", {"agent": "triad", "command": "SYSTEM_STATUS"}
             )
@@ -48,6 +51,7 @@ async def main():
             print("Tools:", ", ".join(sorted(names)))
             print("Ollama diagnostic:", result)
             print("Agents monitoring diagnostic:", agents_result)
+            print("VM diagnostic:", vm_result)
             print("Agent diagnostic:", agent_result)
             print("Note: tool responses do not independently prove an LLM model is online.")
 
