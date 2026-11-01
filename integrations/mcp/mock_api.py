@@ -33,6 +33,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if length < 0:
+                self.respond(400, {"error": "invalid content length"})
+                return
             if length > 4096:
                 self.respond(413, {"error": "too large"})
                 return
