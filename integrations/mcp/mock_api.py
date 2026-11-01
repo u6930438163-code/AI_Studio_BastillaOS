@@ -30,7 +30,7 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError):
             self.respond(400, {"error": "invalid JSON"})
             return
-        if payload.get("command") != "SYSTEM_STATUS":
+        if not isinstance(payload, dict) or payload.get("command") != "SYSTEM_STATUS":
             self.respond(400, {"success": False, "error": "unsupported test command"})
             return
         self.respond(200, {"success": True, "command": "SYSTEM_STATUS", "replies": {}, "mock": True})
