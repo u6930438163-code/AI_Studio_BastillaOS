@@ -39,7 +39,7 @@ check_json_endpoint() {
     });
   ' "$required_key" "$required_type"
 }
-check 'BastillaOS HTTP metrics JSON' check_json_endpoint "http://127.0.0.1:${PORT}/api/system/metrics" cpuPercent number
+check 'BastillaOS HTTP metrics JSON' check_json_endpoint "http://127.0.0.1:${PORT}/api/system/metrics" cpuCores number
 check 'BastillaOS AI status JSON' check_json_endpoint "http://127.0.0.1:${PORT}/api/ai/status" protocol string
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   echo 'PASS Docker daemon accessible (optional for web app)'
