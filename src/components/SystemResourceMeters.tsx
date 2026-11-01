@@ -31,6 +31,7 @@ function Meter({ label, value, description }: { label: string; value: number | n
 export function SystemResourceMeters() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [error, setError] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   useEffect(() => {
     let disposed = false;
     let controller: AbortController | null = null;
@@ -42,7 +43,7 @@ export function SystemResourceMeters() {
         const response = await fetch('/api/system/metrics', { cache: 'no-store', signal: current.signal });
         if (!response.ok) throw new Error('Metrics unavailable');
         const value: Metrics = await response.json();
-        if (!disposed) { setMetrics(value); setError(false); }
+        if (!disposed) { setMetrics(value); setError(false); setLastUpdate(Date.now()); }
       } catch {
         if (!disposed && !current.signal.aborted) setError(true);
       } finally {
@@ -73,6 +74,7 @@ export function SystemResourceMeters() {
         <Meter label="CPU" value={error ? null : metrics?.cpuPercent ?? null} description={metrics ? `${metrics.cpuCores} rdzeni logicznych` : 'Oczekiwanie na dane'} />
         <Meter label="RAM" value={error ? null : ramPercent} description={metrics ? `${formatGiB(metrics.ramUsedBytes)} / ${formatGiB(metrics.ramTotalBytes)} GiB` : 'Oczekiwanie na dane'} />
       </div>
+      {lastUpdate && <p className="text-[11px] text-slate-400">Ostatni pomiar: {new Date(lastUpdate).toLocaleTimeString('pl-PL')}</p>}
       <p className="text-[11px] text-slate-500">Pomiary hosta uruchamiającego serwer, nie telefonu ani przeglądarki.</p>
     </section>
   );
