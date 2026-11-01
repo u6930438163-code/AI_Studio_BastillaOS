@@ -4366,8 +4366,17 @@ function isSameOriginLoopbackRequest(req: express.Request): boolean {
   }
 }
 
+function canUseVmKvm(): boolean {
+  try {
+    fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
+    return fs.statSync('/dev/kvm').isCharacterDevice();
+  } catch {
+    return false;
+  }
+}
+
 function getVmComposeEnvironment(): NodeJS.ProcessEnv {
-  const kvmGroupId = fs.existsSync('/dev/kvm') ? fs.statSync('/dev/kvm').gid : undefined;
+  const kvmGroupId = canUseVmKvm() ? fs.statSync('/dev/kvm').gid : undefined;
   return {
     ...process.env,
     VM_UID: String(process.getuid?.() ?? 1000),
@@ -4476,7 +4485,7 @@ app.post('/api/vm-gemini-4/provision', async (req, res) => {
       }
     }
 
-    const useKvm = fs.existsSync('/dev/kvm') && fs.existsSync(VM_GEMINI_4_KVM_OVERRIDE_FILE);
+    const useKvm = canUseVmKvm() && fs.existsSync(VM_GEMINI_4_KVM_OVERRIDE_FILE);
     await execFileAsync('docker', [
       'compose',
       '--project-name', VM_GEMINI_4_PROJECT,
