@@ -5,8 +5,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "start": "tsx server.ts",
+    "dev": "node --import tsx server.ts",
+    "start": "node --import tsx server.ts",
     "maintenance": "node scripts/maintenance.mjs",
     "check:gemini": "node scripts/check-gemini.mjs",
     "check:api": "node scripts/check-bastilla-api.mjs",
@@ -33,6 +33,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "fflate": "^0.8.3",
+    "firebase": "^13.1.0",
     "katex": "^0.19.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
