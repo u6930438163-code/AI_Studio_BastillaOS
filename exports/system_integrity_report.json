@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-11-01T09:42:23.275Z",
+  "agent": "Astyria",
+  "status": "INTEGRITY_VERIFIED",
+  "checks": {
+    "server_entrypoint": true,
+    "package_manifest": true,
+    "apps_directory": true,
+    "data_directory": true
+  }
+}
