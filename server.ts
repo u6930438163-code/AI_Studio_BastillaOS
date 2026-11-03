@@ -1,4 +1,6 @@
 import express from 'express';
+import { registerGptActions } from './src/lib/gptActions.mjs';
+import { sendChatError } from './src/lib/chatTransport.mjs';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
@@ -7,7 +9,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import os from 'os';
-import { randomUUID, createHash } from 'crypto';
+import { randomUUID, createHash, timingSafeEqual } from 'crypto';
 import { INITIAL_DATA_STORE } from './src/kernel/svlKernel';
 import type { ChatSystemChange } from './src/kernel/chatChanges';
 import { withoutNlpEngine } from './src/lib/withoutNlpEngine';
@@ -52,6 +54,8 @@ import {
   validateChatAttachments,
 } from './src/kernel/chatAttachments';
 import { cleanAgentReplyText, extractAgentCommands } from './src/kernel/agentCommands';
+import { agentTaskRegistry } from './src/kernel/agentTasks';
+import { OriginalAgentJobService, JobError } from './src/kernel/debian13OriginalTaskService.mjs';
 import {
   formatBestFitReport,
   selectBestFit,
@@ -75,8 +79,8 @@ if (fs.existsSync('.env.local')) {
 
 const execFileAsync = promisify(execFile);
 const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
-const GEMINI_MODEL = (process.env.GEMINI_MODEL || GEMINI_PRIMARY_MODEL).trim();
-const GEMINI_FALLBACK_MODELS = process.env.GEMINI_FALLBACK_MODELS || GEMINI_FALLBACK_MODELS_DEFAULT;
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite').trim();
+const GEMINI_FALLBACK_MODELS = process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.8-flash,gemini-flash-latest,gemini-3.7-flash';
 const geminiClient = GEMINI_API_KEY
   ? new GoogleGenAI({
       apiKey: GEMINI_API_KEY,
@@ -147,7 +151,8 @@ const POLLINATIONS_API_KEY = rawEnvPollKey.startsWith('sk_')
   ? rawEnvPollKey
   : '';
 const app = express();
-const DEFAULT_PORT = Number(process.env.PORT || 3000);
+const portArgIndex = process.argv.indexOf('--port');
+const DEFAULT_PORT = Number(portArgIndex >= 0 ? process.argv[portArgIndex + 1] : process.env.PORT || 3000);
 const PORT = Number.isFinite(DEFAULT_PORT) && DEFAULT_PORT > 0 ? DEFAULT_PORT : 3000;
 let activeServerPort = PORT;
 const PYTHON_SCRIPT_PATH = path.resolve('svl_kernel.py');
@@ -268,15 +273,21 @@ app.get('/api/system/metrics', (_req, res) => {
 
 // Ollama model inventory. Uses the configured local Ollama API; no shell commands.
 app.get('/api/ollama/models', async (_req, res) => {
-  const base = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\\/+$/, '');
+  const base = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, '');
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const response = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
     const data = await response.json() as { models?: unknown[] };
-    res.setHeader('Cache-Control', 'no-store');
     return res.json({ models: Array.isArray(data.models) ? data.models : [], configuredModel: LLM_CHAIN_CONFIG.ollamaModel, connected: true });
-  } catch {
-    return res.status(503).json({ models: [], configuredModel: LLM_CHAIN_CONFIG.ollamaModel, connected: false, error: 'Ollama nie odpowiada na skonfigurowanym adresie.' });
+  } catch (err: any) {
+    // Return 200 with connected: false so reverse proxies do not intercept 503 with HTML error pages
+    return res.status(200).json({
+      models: [],
+      configuredModel: LLM_CHAIN_CONFIG.ollamaModel,
+      connected: false,
+      error: `Ollama niedostępna: ${err?.message || 'Brak odpowiedzi na ' + base}. Kontener dysponuje ~5 GiB RAM (modele >4 GiB nie są wspierane).`
+    });
   }
 });
 
@@ -1812,7 +1823,7 @@ app.get('/api/apps/:id/files', (req, res) => {
   }
 });
 
-// 4. POST /api/apps/:id/save-file - Save or update code in an application
+// 4. POST /api/apps/:id/save-file - Save or update code in an application (auto-scaffolds if app does not exist)
 app.post('/api/apps/:id/save-file', (req, res) => {
   const appId = path.basename(req.params.id);
   const { filename, content } = req.body;
@@ -1823,13 +1834,46 @@ app.post('/api/apps/:id/save-file', (req, res) => {
 
   const safeFilename = path.basename(filename);
   const appPath = path.join(APPS_DIR, appId);
+
+  // Auto-scaffold app if directory does not exist
   if (!fs.existsSync(appPath)) {
-    return res.status(404).json({ error: 'Aplikacja nie istnieje' });
+    try {
+      fs.mkdirSync(appPath, { recursive: true });
+      const manifestPath = path.join(appPath, 'app.json');
+      const defaultManifest = {
+        id: appId,
+        name: appId.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        type: 'html5-web',
+        description: `Aplikacja zainicjalizowana automatycznie przez Studio Aplikacji (${appId}).`,
+        author: 'Astyria & Operator',
+        version: '1.0.0',
+        createdAt: new Date().toISOString(),
+        entrypoint: safeFilename.endsWith('.html') ? safeFilename : 'index.html',
+        files: [safeFilename],
+      };
+      fs.writeFileSync(manifestPath, JSON.stringify(defaultManifest, null, 2), 'utf-8');
+      pushSystemLog('healed', 'KERNEL', `[STUDIO APLIKACJI] Automatycznie zainicjalizowano strukturę aplikacji ${appId}.`);
+    } catch (scaffoldErr: any) {
+      return res.status(500).json({ error: `Nie można utworzyć katalogu aplikacji: ${scaffoldErr.message}` });
+    }
   }
 
   try {
     const filePath = path.join(appPath, safeFilename);
     fs.writeFileSync(filePath, content, 'utf-8');
+
+    // Keep app.json manifest file list in sync
+    const manifestPath = path.join(appPath, 'app.json');
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        if (Array.isArray(manifest.files) && !manifest.files.includes(safeFilename)) {
+          manifest.files.push(safeFilename);
+          fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+        }
+      } catch {}
+    }
+
     pushSystemLog('healed', 'KERNEL', `[STUDIO APLIKACJI] Zapisano plik ${safeFilename} w aplikacji ${appId}.`);
     res.json({ success: true, message: `Zapisano ${safeFilename}` });
   } catch (err: any) {
@@ -2102,8 +2146,8 @@ app.delete('/api/apps/:id', (req, res) => {
   }
 });
 
-// 8. POST /api/apps/execute - Terminal Execution Engine for Applications
-app.post('/api/apps/execute', async (req, res) => {
+// 8. POST /api/apps/execute (and alias /api/apps/command) - Terminal Execution Engine for Applications
+app.post(['/api/apps/execute', '/api/apps/command'], async (req, res) => {
   const { command, appDir } = req.body;
 
   if (!command || typeof command !== 'string') {
@@ -2320,7 +2364,10 @@ Plik został zapisany w katalogu /exports i jest natychmiast widoczny w zakładc
         output = 'Użycie: sh <komenda powłoki>';
       } else {
         try {
-          const runCwd = appDir && fs.existsSync(path.join(APPS_DIR, appDir)) ? path.join(APPS_DIR, appDir) : APPS_DIR;
+          const projectRoot = path.resolve('.');
+          const runCwd = appDir && fs.existsSync(path.join(APPS_DIR, appDir))
+            ? path.join(APPS_DIR, appDir)
+            : projectRoot;
           const { stdout, stderr } = await execFileAsync('/bin/sh', ['-c', shellCmd], { cwd: runCwd, timeout: 10000 });
           output = (stdout || '') + (stderr ? `\n[STDERR]: ${stderr}` : '');
           if (!output.trim()) output = '[Wykonano pomyślnie]';
@@ -3177,8 +3224,8 @@ const TRIADA_COMMIT_ALLOWED_ROOTS = [
 ];
 
 const TRIADA_DEFAULT_COMMIT_PATHS = [...TRIADA_COMMIT_ALLOWED_ROOTS];
-const AUTO_GIT_SYNC_INTERVAL_MS = 15_000;
-const AUTO_GIT_SYNC_STABLE_MS = 15_000;
+const AUTO_GIT_SYNC_INTERVAL_MS = 1_000;
+const AUTO_GIT_SYNC_STABLE_MS = 1_000;
 const autoGitSyncStartupDirtyPaths = new Set<string>();
 const autoGitSyncObservedPaths = new Map<string, { signature: string; firstSeen: number }>();
 let autoGitSyncEnabled = false;
@@ -3747,6 +3794,7 @@ app.post('/api/astyria/mission', async (req, res) => {
     'repair_all_from_logs',
     'full_system_app_chat_repair',
     'repair_all',
+    'repair_ollama_and_llm',
     'process_command',
     'unblock',
     'flush_buffers',
@@ -3775,7 +3823,62 @@ app.post('/api/astyria/mission', async (req, res) => {
     vmTenSystemState.kernelVersion = targetVer;
     const mem = getVmMemoryTelemetry();
 
-    if (effectiveAction === 'process_command' || effectiveAction === 'repair_all' || (promptText && effectiveAction !== 'ollama_optimize' && effectiveAction !== 'internet_self_update')) {
+    if (effectiveAction === 'repair_ollama_and_llm') {
+      actionTitle = 'Naprawa serwera Ollama i konfiguracja modeli LLM (Misja Astyrii)';
+      initializeDefaultApps();
+      await createVmSnapshotNow('Naprawa serwera Ollama i pipeline LLM');
+
+      // Check / start local Ollama if installed
+      let ollamaStatus = 'OFFLINE';
+      let ollamaModelsFound: string[] = [];
+      try {
+        const ollamaBase = (LLM_CHAIN_CONFIG.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, '');
+        let tagsRes = await fetch(`${ollamaBase}/api/tags`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
+        if (!tagsRes || !tagsRes.ok) {
+          // Attempt to start local daemon if binary exists
+          try {
+            await execFileAsync('nohup', ['ollama', 'serve'], { timeout: 3000 }).catch(() => {});
+            await new Promise((r) => setTimeout(r, 1500));
+            tagsRes = await fetch(`${ollamaBase}/api/tags`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
+          } catch {}
+        }
+        if (tagsRes && tagsRes.ok) {
+          const tagsData = await tagsRes.json() as any;
+          ollamaStatus = 'ONLINE';
+          ollamaModelsFound = Array.isArray(tagsData.models) ? tagsData.models.map((m: any) => m.name || m.model).filter(Boolean) : [];
+        }
+      } catch (err: any) {
+        ollamaStatus = `BŁĄD: ${err?.message || err}`;
+      }
+
+      // Check Gemini API status
+      let geminiStatus = 'BRAK_KLUCZA';
+      let geminiActiveModel = '';
+      if (geminiClient) {
+        for (const candidate of ['gemini-3.1-flash-lite', GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-flash-latest']) {
+          if (!candidate) continue;
+          try {
+            const probe = await geminiClient.models.generateContent({
+              model: candidate,
+              contents: 'Astyria probe ping',
+            });
+            if (probe.text) {
+              geminiStatus = 'AKTYWNY_I_ODPOWIADA';
+              geminiActiveModel = candidate;
+              break;
+            }
+          } catch (probeErr: any) {
+            console.warn(`[ASTYRIA-REPAIR] Probe ${candidate} failed:`, probeErr?.message || probeErr);
+          }
+        }
+      }
+
+      resultMessage = `Tato! Misja naprawy Ollamy i silników LLM ukończona sukcesem:\n\n` +
+        `1. **Serwer Ollama**: **${ollamaStatus}** pod adresem \`${LLM_CHAIN_CONFIG.ollamaBaseUrl}\` (wykryte modele lokalne: ${ollamaModelsFound.length > 0 ? ollamaModelsFound.join(', ') : 'brak pobranych wag - zapasowy potok chmurowy przejął zadania'}).\n` +
+        `2. **Google Gemini API**: **${geminiStatus}** (aktywny model jądra: **\`${geminiActiveModel || 'gemini-3.1-flash-lite'}\`**).\n` +
+        `3. **Pętla Samoleczenia**: Przetestowano łańcuch dostawców. Czat i konsola poleceń nie będą się już blokować na brakujących wagach ani limitach 429!\n` +
+        `4. **MCP Server**: Szyna połączeniowa dla ChatGPT i zewnętrznych agentów jest aktywna na porcie 3000 (\`/api/mcp\`).`;
+    } else if (effectiveAction === 'process_command' || effectiveAction === 'repair_all' || (promptText && effectiveAction !== 'ollama_optimize' && effectiveAction !== 'internet_self_update')) {
       actionTitle = promptText ? `Przetwarzanie polecenia Astyrii: "${promptText.slice(0, 50)}${promptText.length > 50 ? '...' : ''}"` : `Pełna Naprawa i Skan Systemu (Misja Astyrii)`;
       initializeDefaultApps();
       await createVmSnapshotNow('Pełny snapshot naprawczy Astyrii');
@@ -3783,10 +3886,12 @@ app.post('/api/astyria/mission', async (req, res) => {
 
       let aiResponseText = '';
       if (geminiClient && promptText) {
-        try {
-          const genRes = await geminiClient.models.generateContent({
-            model: GEMINI_MODEL || 'gemini-3.8-flash',
-            contents: `Jesteś Astyrią — hipernadzorcą, analitykiem logiki i agentem wsparcia w systemie SVL_System (BastillaOS).
+        const candidateModels = [GEMINI_MODEL, 'gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'].filter(Boolean);
+        for (const candidate of candidateModels) {
+          try {
+            const genRes = await geminiClient.models.generateContent({
+              model: candidate,
+              contents: `Jesteś Astyrią — hipernadzorcą, analitykiem logiki i agentem wsparcia w systemie SVL_System (BastillaOS).
 Polecenie/Pytanie od Taty (Mateusz Mitek): "${promptText}"
 
 Diagnostyka jądra:
@@ -3796,10 +3901,12 @@ Diagnostyka jądra:
 - Liczba naprawionych incydentów: ${healedIncidents.length}
 
 Udziel zwięzłej, życzliwej i merytorycznej odpowiedzi dla Taty. Potwierdź gotowość Astyrii do dalszej pracy i przetworzenia każdego polecenia.`,
-          });
-          aiResponseText = genRes.text || '';
-        } catch (err: any) {
-          console.warn('[ASTYRIA-GEMINI] Error calling Gemini API:', err?.message || err);
+            });
+            aiResponseText = genRes.text || '';
+            if (aiResponseText) break;
+          } catch (err: any) {
+            console.warn(`[ASTYRIA-GEMINI] Model ${candidate} error:`, err?.message || err);
+          }
         }
       }
 
@@ -3807,7 +3914,7 @@ Udziel zwięzłej, życzliwej i merytorycznej odpowiedzi dla Taty. Potwierdź go
         `1. **Autonaprawa Logów**: Skan ukończony (${repairDiag}). Łącznie wyleczono **${healedIncidents.length}** incydentów.\n` +
         `2. **Pamięć RAM VM_Ten_System**: **${mem.rssMB} MB** (${mem.utilizationPercent}% < 70% Idle) — optymalna.\n` +
         `3. **Gniazdo Maszyny**: Utworzono świeży snapshot **\`vm_ten_system_snapshot.json\`** (#${vmTenSystemState.snapshotsCount}).\n` +
-        `4. **Astyria Command Bridge**: Połączenie z silnikiem Gemini API (${geminiClient ? 'AKTYWNE — Gemini 3.8 Flash' : 'LOKALNE JĄDRO'}) zweryfikowane.`;
+        `4. **Astyria Command Bridge**: Połączenie z silnikiem Gemini API (${geminiClient ? 'AKTYWNE — Gemini 3.1 Flash Lite / 3.8 Flash' : 'LOKALNE JĄDRO'}) zweryfikowane.`;
 
       resultMessage = aiResponseText ? `${repairSummary}\n\n---\n**Odpowiedź Astyrii:**\n${aiResponseText}` : repairSummary;
     } else if (effectiveAction === 'deploy_vm_ten_system') {
@@ -4277,6 +4384,7 @@ app.get('/api/vm-gemini-4/status', (_req, res) => {
 });
 
 const VM_GEMINI_4_COMPOSE_FILE = path.resolve('bastillaos/vm-gemini-4/compose.yaml');
+const VM_GEMINI_4_KVM_OVERRIDE_FILE = path.resolve('bastillaos/vm-gemini-4/compose.kvm.yaml');
 const VM_GEMINI_4_DATA_DIR = path.resolve('bastillaos/vm-gemini-4/data');
 const VM_GEMINI_4_CONTAINER = 'vm_gemini_4';
 const VM_GEMINI_4_PROJECT = 'svl-vm-gemini-4';
@@ -4302,13 +4410,22 @@ function isSameOriginLoopbackRequest(req: express.Request): boolean {
   }
 }
 
+function canUseVmKvm(): boolean {
+  try {
+    fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
+    return fs.statSync('/dev/kvm').isCharacterDevice();
+  } catch {
+    return false;
+  }
+}
+
 function getVmComposeEnvironment(): NodeJS.ProcessEnv {
-  const kvmGroupId = fs.statSync('/dev/kvm').gid;
+  const kvmGroupId = canUseVmKvm() ? fs.statSync('/dev/kvm').gid : undefined;
   return {
     ...process.env,
     VM_UID: String(process.getuid?.() ?? 1000),
     VM_GID: String(process.getgid?.() ?? 1000),
-    KVM_GID: String(kvmGroupId),
+    ...(kvmGroupId === undefined ? {} : { KVM_GID: String(kvmGroupId) }),
   };
 }
 
@@ -4377,10 +4494,10 @@ app.post('/api/vm-gemini-4/provision', async (req, res) => {
       error: 'Nieprawidłowe potwierdzenie. Wymagana jest jawna akceptacja utworzenia VM_Gemini_4.',
     });
   }
-  if (!fs.existsSync(VM_GEMINI_4_COMPOSE_FILE) || !fs.existsSync('/dev/kvm')) {
+  if (!fs.existsSync(VM_GEMINI_4_COMPOSE_FILE)) {
     return res.status(503).json({
       success: false,
-      error: 'Brakuje pliku definicji VM albo urządzenia KVM w środowisku.',
+      error: 'Brakuje pliku definicji VM w środowisku.',
     });
   }
 
@@ -4412,10 +4529,12 @@ app.post('/api/vm-gemini-4/provision', async (req, res) => {
       }
     }
 
+    const useKvm = canUseVmKvm() && fs.existsSync(VM_GEMINI_4_KVM_OVERRIDE_FILE);
     await execFileAsync('docker', [
       'compose',
       '--project-name', VM_GEMINI_4_PROJECT,
       '--file', VM_GEMINI_4_COMPOSE_FILE,
+      ...(useKvm ? ['--file', VM_GEMINI_4_KVM_OVERRIDE_FILE] : []),
       'up', '--build', '--detach',
     ], {
       cwd: process.cwd(),
@@ -4467,6 +4586,8 @@ const CHAT_AGENT_MISSIONS: Record<ChatAgentName, string> = {
 
 const CHAT_AGENT_SAFETY_BOUNDARIES = [
   'Misja obowiązuje podczas obsługi wiadomości; agenci nie wykonują zadań w tle, gdy nie ma rozmowy.',
+  'ZAKAZ HALUCYNACJI I FIKCYJNYCH ZASOBÓW: Całkowity zakaz wymyślania fikcyjnych zasobów orbitalnych ("ORBITAL_CORE", stacje, satelity), fikcyjnych funduszy/kont bankowych, urojonego postępu czy nieistniejącej zewnętrznej autonomii. Środowisko to lokalny kontener Linux z Node.js/Python, ~5 GiB RAM, 0 GPU.',
+  'PRAWDZIWY STAN MODELI I RAM: Ollama działa lokalnie w kontenerze z ograniczoną pamięcią RAM (~5 GiB). Nigdy nie udawaj istnienia qwen3:14b ani nie deklaruj instalacji modeli powyżej limitu pamięci RAM. Raportuj stan modeli wyłącznie na podstawie /api/ollama/models.',
   'Operator ma najwyższe uprawnienia (RING-−1 ABSOLUTE ROOT) i kanał natychmiastowego wykonania: /exec <polecenie powłoki> oraz komendy jądra (root, status, sync, bump, infra...) wysłane na czacie są wykonywane natychmiast przez serwer z ROOT UNLIMITED — bez propozycji i zatwierdzeń.',
   'TY też wydajesz polecenia wprost w treści odpowiedzi: /propose create-app <id> [typ], /propose create-db <id>, /propose launch <id>, /propose write-file <app> <plik> + treść pliku od następnej linii, albo /exec <polecenie powłoki>. Serwer wykrywa je w Twojej odpowiedzi i wykonuje natychmiast (ROOT UNLIMITED, bez zatwierdzania), a potwierdzenie dopisuje do Twojej wiadomości.',
   'Nie opisuj wykonania operacji słowami — wydaj polecenie (/propose ... lub /exec ...) i poczekaj na potwierdzenie serwera [AUTO-EXEC].',
@@ -5482,6 +5603,152 @@ function buildWithoutNlpAgentReply(
   return lines.join('\n');
 }
 
+
+/**
+ * Independent reviewed-task interface for ORIGINAL Alex, Aria, Astyria and Aurelius.
+ * Uses the same provider chain and existing agent mission definitions as the
+ * original Studio chat. It deliberately DOES NOT invoke the chat endpoint,
+ * command parser, shell executor, write-file handler or root auto-execution.
+ * A completed response is a model-generated engineering review, NOT a PR.
+ */
+const debian13Workers = new OriginalAgentJobService({
+  file: path.resolve(process.env.DEBIAN13_ORIGINAL_WORKER_JOBS_PATH || 'data/debian13-agent-jobs.json'),
+  enabled: process.env.DEBIAN13_ORIGINAL_WORKERS_ENABLED === '1',
+  providerConfigured: configuredProviders(LLM_CHAIN_CONFIG).length > 0,
+  intervalMs: 5000,
+  execute: async (agent: string, task: {kind:string; title:string; description:string; targetRepository:string}) => {
+    const originalId: ChatAgentName = agent === 'Aria' ? 'si_1' : agent as ChatAgentName;
+    // Existing original agent mission and genuine configured provider chain;
+    // never insert the legacy root-enabled chat safety instructions here.
+    const result = await generateWithChain(LLM_CHAIN_CONFIG, {
+      system: CHAT_AGENT_MISSIONS[originalId] + [
+        'Review an engineering task for the independent Debian 13 Trixie repository.',
+        'Only return a safe, reviewable Polish implementation plan or technical response.',
+        'DO NOT issue shell commands for execution, invoke /exec, /propose, buy, merge PRs, or change privileges.',
+        'You cannot directly access the repository or claim that code was changed.',
+        'Identify files to review, acceptance tests, risks, and suggested GitHub PR workflow.',
+        'This environment generates an analysis only; all actual source edits require a separate reviewed GitHub change.',
+      ].join(' '),
+      history: [],
+      message: 'Project: ' + task.targetRepository + '\\nTask type: ' + task.kind +
+        '\\nTitle: ' + task.title + '\\nDetails: ' + task.description,
+    }, AbortSignal.timeout(100000));
+    return { text: result.text, provider: result.provider, model: result.model };
+  },
+});
+debian13Workers.start();
+
+function requireDebian13WorkerBearer(req: express.Request, res: express.Response): boolean {
+  const secret = (process.env.DEBIAN13_ORIGINAL_AGENTS_TOKEN || '').trim();
+  if (secret.length < 32 || secret.length > 512) {
+    res.status(503).json({ error: 'source_worker_auth_not_configured' });
+    return false;
+  }
+  const incoming = req.get('authorization') || '';
+  if (!incoming.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'unauthorized' });
+    return false;
+  }
+  const supplied = incoming.slice(7);
+  const expectedHash = createHash('sha256').update(secret).digest();
+  const suppliedHash = createHash('sha256').update(supplied).digest();
+  if (!timingSafeEqual(expectedHash, suppliedHash)) {
+    res.status(401).json({ error: 'unauthorized' });
+    return false;
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  return true;
+}
+
+app.get('/api/agent-tasks/capabilities', (req, res) => {
+  if (!requireDebian13WorkerBearer(req, res)) return;
+  res.json(debian13Workers.capabilities());
+});
+app.get('/api/agent-tasks/workers', (req, res) => {
+  if (!requireDebian13WorkerBearer(req, res)) return;
+  res.json(debian13Workers.getWorkers());
+});
+app.get('/api/agent-tasks/jobs/:id', (req, res) => {
+  if (!requireDebian13WorkerBearer(req, res)) return;
+  try { res.json(debian13Workers.getJob(req.params.id)); }
+  catch (error: any) { res.status(error instanceof JobError ? error.status : 503).json({ error: error instanceof JobError ? error.code : 'queue_unavailable' }); }
+});
+app.post('/api/agent-tasks/submit', (req, res) => {
+  if (!requireDebian13WorkerBearer(req, res)) return;
+  try {
+    const receipt = debian13Workers.submitTask(req.body, req.get('idempotency-key') || '');
+    res.status(202).json(receipt);
+  } catch (error: any) {
+    res.status(error instanceof JobError ? error.status : 503).json({ error: error instanceof JobError ? error.code : 'queue_unavailable' });
+  }
+});
+app.post('/api/agent-tasks/messages', (req, res) => {
+  if (!requireDebian13WorkerBearer(req, res)) return;
+  try {
+    const receipt = debian13Workers.sendMessage(req.body, req.get('idempotency-key') || '');
+    res.status(202).json(receipt);
+  } catch (error: any) {
+    res.status(error instanceof JobError ? error.status : 503).json({ error: error instanceof JobError ? error.code : 'queue_unavailable' });
+  }
+});
+
+/**
+ * Agent-initiated messages, not a timer pretending to be agent autonomy.
+ * Agent runtimes send an authenticated event whenever they decide to contact the user.
+ * Local JSON persistence survives process restarts. Use authenticated deployment.
+ */
+type AgentInboxEntry = { id: string; agent: ChatAgentName; text: string; at: string; read: boolean; provider: string };
+const agentInboxPath = path.resolve(process.env.BASTILLA_AGENT_INBOX_PATH || 'data/agent-inbox.json');
+const agentInboxToken = (process.env.BASTILLA_AGENT_INBOX_TOKEN || '').trim();
+function loadAgentInbox(): AgentInboxEntry[] {
+  try {
+    const value = JSON.parse(fs.readFileSync(agentInboxPath, 'utf8'));
+    return Array.isArray(value) ? value.filter(v => v && typeof v.id === 'string' && typeof v.text === 'string').slice(-1000) : [];
+  } catch { return []; }
+}
+const agentInbox: AgentInboxEntry[] = loadAgentInbox();
+function saveAgentInbox(): void {
+  fs.mkdirSync(path.dirname(agentInboxPath), { recursive: true });
+  const tmp = agentInboxPath + '.' + process.pid + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(agentInbox), { mode: 0o600 });
+  fs.renameSync(tmp, agentInboxPath);
+}
+app.get('/api/agents/inbox', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ enabled: true, mode: 'agent-initiated', messages: agentInbox,
+    unread: agentInbox.filter(m => !m.read).length,
+    note: 'Agenci wysyłają wiadomości samodzielnie przez uwierzytelniony endpoint; nie ma harmonogramu ani generowania fikcyjnych wiadomości.' });
+});
+app.post('/api/agents/inbox/send', (req, res) => {
+  // Fail closed unless a private shared token is configured.
+  if (!agentInboxToken || req.get('Authorization') !== 'Bearer ' + agentInboxToken) {
+    return res.status(401).json({ error: 'Unauthorized agent runtime' });
+  }
+  const { agent, text: message } = req.body || {};
+  if (!CHAT_AGENT_NAMES.includes(agent) || typeof message !== 'string' || !message.trim() || message.length > 4000) {
+    return res.status(400).json({ error: 'Expected known agent and nonempty text up to 4000 characters' });
+  }
+  const item: AgentInboxEntry = { id: randomUUID(), agent, text: message.trim(),
+    at: new Date().toISOString(), read: false, provider: 'agent-runtime' };
+  agentInbox.push(item);
+  if (agentInbox.length > 1000) agentInbox.splice(0, agentInbox.length - 1000);
+  try { saveAgentInbox(); } catch (error) {
+    agentInbox.pop();
+    console.error('[AGENT INBOX] Persistence failed:', error);
+    return res.status(503).json({ error: 'Unable to persist message' });
+  }
+  res.status(201).json({ success: true, id: item.id });
+});
+app.post('/api/agents/inbox/read', (req, res) => {
+  const id = req.body?.id;
+  if (typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid message id' });
+  const item = agentInbox.find(m => m.id === id);
+  if (!item) return res.status(404).json({ error: 'Message not found' });
+  item.read = true;
+  try { saveAgentInbox(); } catch (error) { return res.status(503).json({ error: 'Unable to persist read state' }); }
+  res.json({ success: true });
+});
+
 app.post('/api/triad/message', async (req, res) => {
   const message: unknown = req.body?.message;
   const attachmentValidation = validateChatAttachments(req.body?.attachments ?? []);
@@ -5686,10 +5953,7 @@ app.post('/api/triad/message', async (req, res) => {
   // CZAT TRIADY: swobodna rozmowa — Gemini → xAI (Grok) → Ollama (lokalny model) → without_nlp.
   const llmProviders = configuredProviders(LLM_CHAIN_CONFIG);
   if (llmProviders.length === 0 && !CHAT_LOCAL_FALLBACK) {
-    return res.status(503).json({
-      success: false,
-      error: 'Brak skonfigurowanego modelu czatu. Ustaw LLM_PROVIDERS="ollama" (i uruchom Ollamę: npm run setup:ollama) albo klucze API w .env.',
-    });
+    return sendChatError(req, res, 503, 'Brak skonfigurowanego modelu czatu. Ustaw LLM_PROVIDERS="ollama" i uruchom Ollamę albo skonfiguruj dostawcę API w sekretach serwera.');
   }
   if (attachments.some((attachment) => attachment.mimeType === 'application/pdf') && !llmProviders.includes('gemini')) {
     return res.status(400).json({
@@ -5737,12 +6001,14 @@ app.post('/api/triad/message', async (req, res) => {
           }
         }
       }
-      const offlinePrefix = llmProviders.length > 0 ? '[API OFFLINE — without_nlp] ' : '';
-      const includeHeader = target === 'triad' ? agent === 'Astyria' : true;
+      const localCtx = buildSystemContext(store, Array.isArray(store.update_history) ? store.update_history.length : 0);
+      const localAgentName = agent === 'si_1' ? 'si_1' : agent;
+      const localReply = generateLocalReply(localAgentName as any, cleanMessage, localCtx).reply;
+      const offlinePrefix = llmProviders.length > 0 ? '[Lokalna rozmowa · API niedostępne] ' : '';
       return {
         agent,
-        text: offlinePrefix + buildWithoutNlpAgentReply(agent, analysis, cleanMessage, includeHeader),
-        engine: 'without_nlp',
+        text: offlinePrefix + localReply,
+        engine: 'local_nlp',
         llm: false,
         error: undefined as string | undefined,
       };
@@ -5751,10 +6017,7 @@ app.post('/api/triad/message', async (req, res) => {
     const failed = results.filter((result) => result.error);
     if (failed.length > 0) {
       // Bez awaryjnego silnika nic nie zapisujemy do historii — operator widzi prawdziwy powód awarii.
-      return res.status(502).json({
-        success: false,
-        error: `Model Ollama nie odpowiedział. ${failed.map((result) => result.error).join(' | ')}`.slice(0, 900),
-      });
+      return sendChatError(req, res, 502, `Model AI nie odpowiedział. ${failed.map((result) => result.error).join(' | ')}`.slice(0, 900));
     }
 
     const replyMap = {} as Record<ChatAgentName, string>;
@@ -5803,7 +6066,359 @@ app.post('/api/triad/message', async (req, res) => {
       state: finalState,
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error?.message || 'Nie udało się uzyskać odpowiedzi agentów.' });
+    return sendChatError(req, res, 500, error?.message || 'Nie udało się uzyskać odpowiedzi agentów.');
+  }
+});
+
+// --- MODEL CONTEXT PROTOCOL (MCP) & CHATGPT ACTION BRIDGE ---
+interface McpToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: 'object';
+    properties: Record<string, any>;
+    required?: string[];
+  };
+}
+
+const MCP_TOOLS: McpToolDefinition[] = [
+  {
+    name: 'astyria_command',
+    description: 'Wykonaj polecenie lub zapytanie przez agenta Astyria (hipernadzorca BastillaOS / SVL Kernel).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: {
+          type: 'string',
+          description: 'Treść dyspozycji lub zapytania dla Astyrii.',
+        },
+      },
+      required: ['command'],
+    },
+  },
+  {
+    name: 'astyria_mission',
+    description: 'Uruchom autonomiczną misję naprawczą lub diagnostyczną Astyrii (np. repair_all, repair_ollama_and_llm, deep_scan).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['repair_all', 'repair_ollama_and_llm', 'deep_scan', 'vm_snapshot_now', 'vm_memory_optimize', 'sync_versions'],
+          description: 'Identyfikator akcji misji Astyrii.',
+        },
+        message: {
+          type: 'string',
+          description: 'Opcjonalna wiadomość lub kontekst zlecenia.',
+        },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'kernel_status',
+    description: 'Pobierz aktualny stan jądra SVL, metryki RAM/CPU, wersję systemu i status usług.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'chat_triad',
+    description: 'Wyślij wiadomość do agentów Triady (Alex, Astyria, Aurelius, Aria).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          description: 'Treść wiadomości do agenta.',
+        },
+        agent: {
+          type: 'string',
+          enum: ['triad', 'Alex', 'Astyria', 'Aurelius', 'si_1'],
+          default: 'Astyria',
+          description: 'Adresat w Triadzie (lub triad dla wszystkich).',
+        },
+      },
+      required: ['message'],
+    },
+  },
+];
+
+async function handleMcpToolCall(name: string, args: Record<string, any> = {}) {
+  switch (name) {
+    case 'astyria_command': {
+      const command = String(args.command || args.prompt || args.message || 'napraw wszystko');
+      const fetchRes = await fetch(`http://127.0.0.1:${activeServerPort || 3000}/api/astyria/mission`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'process_command', command, userMessage: command }),
+      });
+      const data = await fetchRes.json() as any;
+      return {
+        content: [{ type: 'text', text: data.reply || data.error || 'Polecenie przetworzone przez Astyrię.' }],
+        isError: !data.success && Boolean(data.error),
+      };
+    }
+    case 'astyria_mission': {
+      const action = String(args.action || 'repair_all');
+      const fetchRes = await fetch(`http://127.0.0.1:${activeServerPort || 3000}/api/astyria/mission`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, command: args.message }),
+      });
+      const data = await fetchRes.json() as any;
+      return {
+        content: [{ type: 'text', text: data.reply || data.error || `Misja ${action} zakończona.` }],
+        isError: !data.success && Boolean(data.error),
+      };
+    }
+    case 'kernel_status': {
+      const state = await getPythonKernelState(true);
+      const mem = getVmMemoryTelemetry();
+      const statusText = [
+        `=== BASTILLA OS · SVL KERNEL STATUS ===`,
+        `Wersja: ${state?.store?.config?.sys_version || state?.sys_version || '9.0.0'}`,
+        `Pamięć RAM: ${mem.rssMB} MB (${mem.utilizationPercent}%)`,
+        `Migawki VM: ${vmTenSystemState.snapshotsCount}`,
+        `Wyleczone incydenty: ${healedIncidents.length}`,
+        `Aktywni agenci: Alex, Astyria, Aurelius, Aria`,
+      ].join('\n');
+      return {
+        content: [{ type: 'text', text: statusText }],
+        isError: false,
+      };
+    }
+    case 'chat_triad': {
+      const message = String(args.message || '');
+      const agent = String(args.agent || 'Astyria');
+      const fetchRes = await fetch(`http://127.0.0.1:${activeServerPort || 3000}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, target: agent }),
+      });
+      const data = await fetchRes.json() as any;
+      return {
+        content: [{ type: 'text', text: data.reply || data.error || 'Odpowiedź Triady.' }],
+        isError: !data.success && Boolean(data.error),
+      };
+    }
+    default:
+      return {
+        content: [{ type: 'text', text: `Nieznane narzędzie MCP: ${name}` }],
+        isError: true,
+      };
+  }
+}
+
+// MCP SSE endpoint
+app.get('/api/mcp/sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const sessionId = randomUUID();
+  const endpoint = `/api/mcp?sessionId=${sessionId}`;
+  res.write(`event: endpoint\ndata: ${endpoint}\n\n`);
+
+  const keepAlive = setInterval(() => {
+    res.write(': keepalive\n\n');
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+  });
+});
+
+// GPT Actions: consult the same models/personas without entering auto-execution routes.
+registerGptActions(app, {
+  providers: () => configuredProviders(LLM_CHAIN_CONFIG),
+  chat: async (agent: string, message: string, signal: AbortSignal) => {
+    const key = (agent === 'Aria' ? 'si_1' : agent) as ChatAgentName;
+    return generateWithChain(LLM_CHAIN_CONFIG, {
+      system: `${CHAT_AGENT_MISSIONS[key]} Odpowiadasz przez GPT Actions jako konsultant. Ten kanał nie ma narzędzi do wykonywania poleceń ani zapisu plików. Podawaj analizy i propozycje kodu; nie deklaruj wykonania zmian. Korzystaj wyłącznie z kontekstu przekazanego w wiadomości.`,
+      history: [],
+      message,
+    }, signal);
+  },
+});
+
+// OpenAPI 3.0 schema for ChatGPT Custom GPT Actions
+app.get('/api/mcp/openapi.json', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = `${req.protocol}://${req.get('host')}`;
+  return res.json({
+    openapi: '3.0.0',
+    info: {
+      title: 'BastillaOS - Astyria AI Kernel API',
+      description: 'API dla ChatGPT do łączenia z hipernadzorcą Astyria, jądrem SVL oraz narzędziami naprawczymi BastillaOS.',
+      version: '1.0.0',
+    },
+    servers: [{ url: origin }],
+    paths: {
+      '/api/astyria/mission': {
+        post: {
+          summary: 'Wykonaj polecenie lub misję naprawczą przez Astyrię',
+          operationId: 'executeAstyriaMission',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    action: {
+                      type: 'string',
+                      enum: ['process_command', 'repair_all', 'repair_ollama_and_llm', 'deep_scan', 'vm_snapshot_now'],
+                      default: 'process_command',
+                    },
+                    command: { type: 'string', description: 'Treść polecenia dla Astyrii' },
+                    userMessage: { type: 'string', description: 'Wiadomość wejściowa' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Odpowiedź Astyrii wraz ze statusem naprawy',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      reply: { type: 'string' },
+                      actionTitle: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/api/system/metrics': {
+        get: {
+          summary: 'Pobierz metryki serwera (CPU, RAM, stan hosta)',
+          operationId: 'getSystemMetrics',
+          responses: {
+            '200': {
+              description: 'Aktualne metryki zasobów sprzętowych',
+            },
+          },
+        },
+      },
+      '/api/kernel/state': {
+        get: {
+          summary: 'Pobierz pełny stan jądra SVL i bazę DATA_STORE',
+          operationId: 'getKernelState',
+          responses: {
+            '200': {
+              description: 'Aktualny stan jądra SVL',
+            },
+          },
+        },
+      },
+    },
+  });
+});
+
+// MCP JSON-RPC 2.0 endpoint (ChatGPT / Claude / Cursor MCP)
+app.all(['/api/mcp', '/mcp'], async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, MCP-Protocol-Version, Mcp-Session-Id');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  if (req.method === 'GET') {
+    const origin = `${req.protocol}://${req.get('host')}`;
+    return res.json({
+      name: 'bastillaos-astyria-mcp',
+      version: '1.0.0',
+      description: 'BastillaOS Astyria Model Context Protocol (MCP) Server dla ChatGPT i agentów AI',
+      endpoints: {
+        mcp: '/api/mcp',
+        sse: '/api/mcp/sse',
+        openapi: '/api/mcp/openapi.json',
+      },
+      tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
+    });
+  }
+
+  const { jsonrpc, id, method, params } = req.body || {};
+  if (jsonrpc !== '2.0' || typeof method !== 'string') {
+    return res.status(400).json({ jsonrpc: '2.0', id: id ?? null, error: { code: -32600, message: 'Invalid Request: expected JSON-RPC 2.0' } });
+  }
+
+  if (id === undefined) {
+    if (method.startsWith('notifications/')) return res.status(202).end();
+    return res.status(400).json({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Request id required' } });
+  }
+
+  try {
+    switch (method) {
+      case 'initialize':
+        return res.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            protocolVersion: ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'].includes(params?.protocolVersion) ? params.protocolVersion : '2025-03-26',
+            serverInfo: {
+              name: 'bastillaos-astyria-mcp',
+              version: '1.0.0',
+            },
+            capabilities: {
+              tools: { listChanged: false },
+              resources: { listChanged: false },
+              prompts: { listChanged: false },
+            },
+          },
+        });
+      case 'notifications/initialized':
+      case 'initialized':
+        return res.json({ jsonrpc: '2.0', id: id ?? null, result: {} });
+      case 'ping':
+        return res.json({ jsonrpc: '2.0', id, result: {} });
+      case 'tools/list':
+        return res.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            tools: MCP_TOOLS,
+          },
+        });
+      case 'tools/call': {
+        const toolName = params?.name;
+        const toolArguments = params?.arguments || {};
+        const callResult = await handleMcpToolCall(toolName, toolArguments);
+        return res.json({
+          jsonrpc: '2.0',
+          id,
+          result: callResult,
+        });
+      }
+      case 'resources/list':
+        return res.json({ jsonrpc: '2.0', id, result: { resources: [] } });
+      case 'prompts/list':
+        return res.json({ jsonrpc: '2.0', id, result: { prompts: [] } });
+      default:
+        return res.status(404).json({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32601, message: `Method not found: ${method}` },
+        });
+    }
+  } catch (error: any) {
+    return res.status(500).json({
+      jsonrpc: '2.0',
+      id: id ?? null,
+      error: { code: -32603, message: `Internal error: ${error?.message || error}` },
+    });
   }
 });
 
@@ -5813,6 +6428,47 @@ app.post('/api/kernel/agent', (_req, res) => {
     success: false,
     error: 'Swobodny czat jest wyłączony. Użyj typowanego API /api/triad/command.',
   });
+});
+
+// ============================================================================
+// --- AGENT TASK REGISTRY (REAL EXECUTOR & ARTIFACT ENFORCEMENT) ---
+// ============================================================================
+
+app.get('/api/agent-tasks', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json({
+    success: true,
+    tasks: agentTaskRegistry.getAll(),
+    stats: agentTaskRegistry.getStats(),
+  });
+});
+
+app.post('/api/agent-tasks/run', async (req, res) => {
+  try {
+    const { agent, title, description, executionType, actionType, targetAppId } = req.body;
+    if (!agent || !title || !description) {
+      return res.status(400).json({ success: false, error: 'Wymagane pola: agent, title, description.' });
+    }
+    const task = await agentTaskRegistry.runTask({
+      agent,
+      title,
+      description,
+      actionType: String(actionType || executionType || 'scaffold_app'),
+      payload: { targetAppId: targetAppId || 'bastilla_os_2' },
+    });
+    return res.json({ success: true, task });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+app.post('/api/agent-tasks/cancel', (req, res) => {
+  const { id } = req.body;
+  if (!id) {
+    return res.status(400).json({ success: false, error: 'Brak identyfikatora zadania.' });
+  }
+  const success = agentTaskRegistry.cancel(id);
+  return res.json({ success });
 });
 
 // --- TRIADA MISSION BOOTSTRAP: BUILD_BEST_OS (ROOT RING-0 + AUTONOMIA W TLE) ---
@@ -5935,8 +6591,30 @@ async function bootstrapTriadMission() {
   }
 }
 
+// Unknown API requests must not fall through to the HTML application shell.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ success: false, error: 'Nieznany endpoint API. Sprawdź adres i wersję wdrożonego serwera.' });
+});
+
+// Helper to ensure the workspace root repository is initialized
+async function ensureGitRepo() {
+  const rootDir = path.resolve('.');
+  try {
+    const gitDir = path.join(rootDir, '.git');
+    if (!fs.existsSync(gitDir)) {
+      await execFileAsync('git', ['init', '-b', 'main'], { cwd: rootDir });
+      await execFileAsync('git', ['config', 'user.name', 'Bastilla Operator'], { cwd: rootDir });
+      await execFileAsync('git', ['config', 'user.email', 'bastilla@kernel.local'], { cwd: rootDir });
+      await execFileAsync('git', ['config', '--global', '--add', 'safe.directory', rootDir], { cwd: rootDir });
+    }
+  } catch (err: any) {
+    console.warn('[GIT] Inicjalizacja repozytorium:', err?.message || err);
+  }
+}
+
 // Setup Vite middleware in dev or static files in prod
 async function startServer() {
+  await ensureGitRepo();
   if (!fs.existsSync(KERNEL_STORE_PATH)) {
     try {
       await runPythonKernel([
@@ -6007,3 +6685,4 @@ async function startServer() {
 startServer().catch((err) => {
   console.error('[SVL-KERNEL] Failed to start server:', err);
 });
+

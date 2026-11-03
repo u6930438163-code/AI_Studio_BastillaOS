@@ -30,7 +30,10 @@ import { FileExplorer } from './components/FileExplorer';
 import { AppsStudioView } from './components/AppsStudioView';
 import { WithoutNlpView } from './components/WithoutNlpView';
 import { GitHubExportView } from './components/GitHubExportView';
+import { CloudLibraryView } from './components/CloudLibraryView';
+import { IntegrationsView } from './components/IntegrationsView';
 import { BastillaDashboard } from './components/BastillaDashboard';
+import { BastillaOS2View } from './components/BastillaOS2View';
 import {
   AstyriaMissionAction,
   AgentProtocolReply,
@@ -508,7 +511,7 @@ export default function App() {
             versionCount={dataStore?.update_history?.length || 0}
           />
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
+        <main className={`flex min-w-0 flex-1 flex-col overflow-x-hidden ${activeTab === 'comms' || activeTab === 'terminal' ? 'min-h-[75dvh] w-full lg:min-h-[calc(100dvh-7rem)]' : 'min-h-0'}`}>
           {activeTab === 'home' && <SystemResourceMeters />}
           {activeTab === 'home' && <OllamaModelManager />}
           {activeTab === 'home' && <BackgroundAgentsStatus />}
@@ -520,6 +523,10 @@ export default function App() {
               onSendMessage={handleSendMessage}
               onProvisionGeminiVm={handleProvisionGeminiVm}
             />
+          )}
+
+          {activeTab === 'bastilla_os_2' && (
+            <BastillaOS2View />
           )}
 
           {activeTab === 'comms' && (
@@ -633,6 +640,19 @@ export default function App() {
 
           {activeTab === 'without_nlp' && (
             <WithoutNlpView onSendProtocol={handleSendProtocol} />
+          )}
+
+          {activeTab === 'integrations' && <IntegrationsView onOpenLibrary={() => setActiveTab('cloud_library')} />}
+
+          {activeTab === 'cloud_library' && <CloudLibraryView />}
+          {activeTab === 'project_progress' && (
+            <section className="flex min-h-[75dvh] flex-1 flex-col bg-slate-950">
+              <header className="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+                <h1 className="text-sm font-semibold text-cyan-100">Bastilla OS 2 — postęp i aktualności</h1>
+                <a href="/dashboard/bastilla-os-2-progress.html" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-300">Pełny ekran</a>
+              </header>
+              <iframe src="/dashboard/bastilla-os-2-progress.html" title="Postęp Bastilla OS 2 z GitHuba" className="min-h-[70dvh] w-full flex-1 border-0" sandbox="allow-scripts allow-same-origin allow-popups" />
+            </section>
           )}
 
           {activeTab === 'github' && (

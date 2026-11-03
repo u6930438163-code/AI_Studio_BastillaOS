@@ -19,6 +19,10 @@ import {
   HardDrive,
   ShieldCheck,
   Save,
+  Copy,
+  ExternalLink,
+  Globe,
+  Bot,
 } from 'lucide-react';
 
 interface AstyriaMissionViewProps {
@@ -32,6 +36,7 @@ export const AstyriaMissionView: React.FC<AstyriaMissionViewProps> = ({
 }) => {
   const [selectedMissionAction, setSelectedMissionAction] = useState('repair_all');
   const [customCommand, setCustomCommand] = useState('');
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [latestReply, setLatestReply] = useState<string | null>(null);
   const [latestError, setLatestError] = useState<string | null>(null);
@@ -583,6 +588,7 @@ export const AstyriaMissionView: React.FC<AstyriaMissionViewProps> = ({
               disabled={isExecuting}
             >
               <option value="repair_all">Pełna naprawa i autodiagnoza</option>
+              <option value="repair_ollama_and_llm">Napraw Ollama &amp; Silniki LLM (Ollama + Gemini)</option>
               <option value="deep_scan">Odczytowy skan logów i telemetrii</option>
               <option value="vm_firewall_audit">Raport stanu zapory VM</option>
               <option value="vm_snapshot_now">Utwórz snapshot VM_Ten_System</option>
@@ -606,6 +612,52 @@ export const AstyriaMissionView: React.FC<AstyriaMissionViewProps> = ({
             </button>
           </div>
         </form>
+
+        {/* MCP Server Link Box for ChatGPT */}
+        <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs bg-slate-950/60 p-3 rounded-xl border border-cyan-900/40">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0">
+              <Bot className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-cyan-200 flex items-center gap-2">
+                <span>SERWER MCP DLA CHATGPT // MODEL CONTEXT PROTOCOL</span>
+                <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-mono">PORT 3000 ACTIVE</span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-sans truncate">
+                Podłącz ChatGPT (SSE/JSON-RPC): <code className="text-cyan-300 font-mono">{typeof window !== 'undefined' ? `${window.location.origin}/api/mcp` : '/api/mcp'}</code>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const url = typeof window !== 'undefined' ? `${window.location.origin}/api/mcp` : '/api/mcp';
+                navigator.clipboard?.writeText(url);
+                setCopiedUrl('mcp');
+                setTimeout(() => setCopiedUrl(null), 2500);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 font-mono text-[11px] flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>{copiedUrl === 'mcp' ? 'SKOPIOWANO MCP!' : 'KOPIUJ LINK MCP'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const url = typeof window !== 'undefined' ? `${window.location.origin}/api/mcp/openapi.json` : '/api/mcp/openapi.json';
+                navigator.clipboard?.writeText(url);
+                setCopiedUrl('openapi');
+                setTimeout(() => setCopiedUrl(null), 2500);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 font-mono text-[11px] flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{copiedUrl === 'openapi' ? 'SKOPIOWANO ACTION!' : 'OPENAPI DLA GPT'}</span>
+            </button>
+          </div>
+        </div>
         {(isExecuting || latestReply || latestError) && (
           <div
             role={latestError ? 'alert' : 'status'}

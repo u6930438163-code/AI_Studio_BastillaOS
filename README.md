@@ -11,6 +11,36 @@ local Ollama-powered chat, local kernel state, diagnostics and application manag
 - Python 3 for the local kernel
 - Ollama with the configured local chat model
 
+## GitHub Codespaces (without your own server)
+
+Open this repository in **Code > Codespaces > Create codespace on main**.
+The devcontainer installs Node.js 22, Python 3, Docker CLI support and project
+dependencies, then starts the BastillaOS web server. Open the forwarded **3000**
+port from the Codespaces **Ports** tab. Keep the port **Private**.
+
+Check the app inside the Codespaces terminal:
+
+```sh
+curl -fsS http://127.0.0.1:3000/api/system/metrics
+npm test
+```
+
+To start the separate Debian 13 QEMU VM **explicitly**, run:
+
+```sh
+bash scripts/auto-start-vm.sh
+tail -n 80 /tmp/bastilla-vm-autostart.log
+docker logs --tail 80 vm_gemini_4
+```
+
+Docker access and sufficient Codespaces storage/RAM are required. Without
+accessible `/dev/kvm`, the VM uses slower software emulation. Docker can be
+unavailable in some Codespaces configurations. VM startup is not guaranteed.
+The guest SSH port is bound to localhost on 2224; do not publish it publicly.
+The web app starts independently of the VM. Ollama is optional for app startup
+but is required for local model responses; its models are **not** downloaded
+automatically by the devcontainer.
+
 ## Run locally
 
 ```sh
@@ -44,7 +74,7 @@ operation. A separate **Zatwierdzam: utwórz VM** click is required before the
 server will create it. The fixed operation starts a local QEMU/KVM Debian 13
 cloud guest in Docker with 2 vCPUs, 2 GiB guest memory and a 20 GiB copy-on-write
 disk. It downloads the official Debian cloud image and checks the published
-SHA-512 checksum before boot. Docker/KVM and outbound HTTPS access are required.
+SHA-512 checksum before boot. Docker and outbound HTTPS access are required. KVM is optional: when unavailable, QEMU falls back to slower TCG software emulation.
 
 The provisioning endpoint only accepts that fixed operation, only for a
 same-origin browser request from a loopback client, and checks the Compose
