@@ -424,8 +424,10 @@ export async function generateOllama(
       `Ollama: model ${model} nie analizuje zdjęć. Pobierz model z obsługą obrazów (np. ollama pull gemma3:4b) albo wyślij załącznik tekstowy.`,
     );
   }
+  // Neutral Debian 13 workers have no custom instructions at startup.
+  // An empty system field must NOT be sent as a synthetic system message.
   const messages = [
-    { role: 'system', content: request.system },
+    ...(request.system.trim() ? [{ role: 'system', content: request.system }] : []),
     ...request.history.map((turn) => ({ role: turn.role, content: turn.text })),
     { role: 'user', content: request.message, ...(images.length ? { images } : {}) },
   ];
