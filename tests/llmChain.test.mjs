@@ -283,3 +283,22 @@ test('rozgrzewka Ollamy wczytuje model i nie rzuca przy awarii', async () => {
   const failed = await warmupOllama({ ollamaModel: 'qwen3.5:4b', fetchImpl: down.impl });
   assert.equal(failed.ok, false);
 });
+
+
+test('Debian13 neutral Ollama-only model has no system messages and never calls paid providers', async () => {
+  const { impl, calls } = mockFetch([
+    [/api\/chat/, { respond: () => ollamaOk('Review ready') }],
+  ]);
+  const reply = await generateWithChain({
+    providers: ['ollama'],
+    geminiApiKey: 'never-send-to-gemini',
+    xaiApiKey: 'never-send-to-xai',
+    ollamaModel: 'neutral-ollama-test',
+    fetchImpl: impl,
+  }, { ...request, system: '', history: [], message: 'Analyze explicit owner task' });
+  assert.equal(reply.provider, 'ollama');
+  assert.equal(calls.length, 1);
+  const body = calls[0].body;
+  assert.deepEqual(body.messages, [{ role: 'user', content: 'Analyze explicit owner task' }]);
+  assert.ok(!JSON.stringify(body).includes('never-send-to-'));
+});
