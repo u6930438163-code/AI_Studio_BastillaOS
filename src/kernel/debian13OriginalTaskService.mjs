@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 
 export const ORIGINAL_AGENTS = Object.freeze(['Alex', 'Aria', 'Astyria', 'Aurelius']);
 export const SOURCE_REPOSITORY = 'u6930438163-code/AI_Studio_BastillaOS';
-export const TARGET_REPOSITORY = 'u6930438163-code/Debian_13_Trixie';
+export const TARGET_REPOSITORY = 'mmitek515-netizen/Debian_13';
 export const TASK_CAPABILITY = 'debian13_review_task_v1';
 export const MESSAGE_CAPABILITY = 'debian13_agent_message_v1';
 const MAX_JOBS = 300;
@@ -151,6 +151,8 @@ export class OriginalAgentJobService {
     return {
       sourceRepository: SOURCE_REPOSITORY,
       targetRepository: TARGET_REPOSITORY,
+      assignedRoles: false,
+      customInstructions: false,
       protocolVersion: 1,
       enabled: this.enabled,
       providerConfigured: this.providerConfigured,
@@ -176,8 +178,10 @@ export class OriginalAgentJobService {
 
   capabilities() {
     return {
-      sourceRepository: SOURCE_REPOSITORY, protocolVersion: 1,
+      sourceRepository: SOURCE_REPOSITORY, targetRepository: TARGET_REPOSITORY,
+      protocolVersion: 1,
       agents: [...ORIGINAL_AGENTS],
+      assignedRoles: false, customInstructions: false,
       agent: 'Alex', // Legacy capabilities reader: actual Issue-to-PR NOT advertised.
       capabilities: this.enabled && this.providerConfigured
         ? [TASK_CAPABILITY, MESSAGE_CAPABILITY] : [],
