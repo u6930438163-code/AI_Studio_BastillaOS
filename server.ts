@@ -5605,30 +5605,27 @@ function buildWithoutNlpAgentReply(
 
 
 /**
- * Independent reviewed-task interface for ORIGINAL Alex, Aria, Astyria and Aurelius.
- * Uses the same provider chain and existing agent mission definitions as the
- * original Studio chat. It deliberately DOES NOT invoke the chat endpoint,
- * command parser, shell executor, write-file handler or root auto-execution.
- * A completed response is a model-generated engineering review, NOT a PR.
+ * Separate owner-assigned tasks for the four ORIGINAL agents, without roles
+ * or implicit behavioral prompts. No privilege, shell, file, GitHub mutation
+ * or billing operations are reachable from this worker queue.
+ *
+ * For Debian 13 jobs Ollama is the ONLY provider. Global Studio provider
+ * configuration (including paid cloud services) must not silently carry over.
+ * Paid OpenAI fallback requires a future separate implementation and explicit
+ * opt-in, not merely an OPENAI_API_KEY in the environment.
  */
+const DEBIAN13_AGENT_MODEL_CONFIG: LlmChainConfig = {
+  ...LLM_CHAIN_CONFIG,
+  providers: ['ollama'],
+};
 const debian13Workers = new OriginalAgentJobService({
   file: path.resolve(process.env.DEBIAN13_ORIGINAL_WORKER_JOBS_PATH || 'data/debian13-agent-jobs.json'),
   enabled: process.env.DEBIAN13_ORIGINAL_WORKERS_ENABLED === '1',
-  providerConfigured: configuredProviders(LLM_CHAIN_CONFIG).length > 0,
+  providerConfigured: configuredProviders(DEBIAN13_AGENT_MODEL_CONFIG).length > 0,
   intervalMs: 5000,
-  execute: async (agent: string, task: {kind:string; title:string; description:string; targetRepository:string}) => {
-    const originalId: ChatAgentName = agent === 'Aria' ? 'si_1' : agent as ChatAgentName;
-    // Existing original agent mission and genuine configured provider chain;
-    // never insert the legacy root-enabled chat safety instructions here.
-    const result = await generateWithChain(LLM_CHAIN_CONFIG, {
-      system: CHAT_AGENT_MISSIONS[originalId] + [
-        'Review an engineering task for the independent Debian 13 Trixie repository.',
-        'Only return a safe, reviewable Polish implementation plan or technical response.',
-        'DO NOT issue shell commands for execution, invoke /exec, /propose, buy, merge PRs, or change privileges.',
-        'You cannot directly access the repository or claim that code was changed.',
-        'Identify files to review, acceptance tests, risks, and suggested GitHub PR workflow.',
-        'This environment generates an analysis only; all actual source edits require a separate reviewed GitHub change.',
-      ].join(' '),
+  execute: async (_agent: string, task: {kind:string; title:string; description:string; targetRepository:string}) => {
+    const result = await generateWithChain(DEBIAN13_AGENT_MODEL_CONFIG, {
+      system: '',
       history: [],
       message: 'Project: ' + task.targetRepository + '\\nTask type: ' + task.kind +
         '\\nTitle: ' + task.title + '\\nDetails: ' + task.description,
