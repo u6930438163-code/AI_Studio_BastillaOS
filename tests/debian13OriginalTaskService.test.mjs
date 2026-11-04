@@ -161,3 +161,23 @@ test('Messages go through real provider queue; no synthetic receipt of model rep
     assert.equal(reply.workerExecutionVerified, true);
   } finally { f.dispose(); }
 });
+
+
+test('Original workers target the active Debian 13 repo without preset roles or instructions', () => {
+  const f = fixture();
+  try {
+    assert.equal(TARGET_REPOSITORY, 'mmitek515-netizen/Debian_13');
+    const info = f.service.capabilities();
+    assert.equal(info.targetRepository, TARGET_REPOSITORY);
+    assert.deepEqual(info.agents, ['Alex', 'Aria', 'Astyria', 'Aurelius']);
+    assert.equal(info.assignedRoles, false);
+    assert.equal(info.customInstructions, false);
+    const workers = f.service.getWorkers();
+    assert.equal(workers.targetRepository, TARGET_REPOSITORY);
+    assert.equal(workers.assignedRoles, false);
+    assert.equal(workers.customInstructions, false);
+    assert.throws(() => f.service.submitTask({
+      ...body(), task: {...body().task, targetRepository: 'u6930438163-code/Debian_13_Trixie'},
+    }), /invalid_review_task_contract/);
+  } finally { f.dispose(); }
+});
