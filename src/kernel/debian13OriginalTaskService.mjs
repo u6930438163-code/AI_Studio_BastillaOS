@@ -200,11 +200,13 @@ export class OriginalAgentJobService {
   async tick() {
     if (!this.enabled || !this.providerConfigured) return;
     const now = this.now();
-    for (const agent of ORIGINAL_AGENTS) {
-      if (this.running.has(agent)) continue;
-      const job = this.jobs.find(x => x.agent === agent && x.status === 'queued' &&
-        x.nextAttemptAt <= now);
-      if (!job) continue;
+    // All four agents share one local Ollama runtime. Do not submit four
+    // simultaneous generations: CPU inference can exceed the request timeout
+    // while waiting in Ollama's own queue. Preserve arrival order across agents.
+    if (this.running.size) return;
+    const job = this.jobs.find(x => x.status === 'queued' && x.nextAttemptAt <= now);
+    if (job) {
+      const agent = job.agent;
       job.status = 'running';
       job.attempts++;
       job.startedAt = new Date(now).toISOString();
@@ -241,6 +243,7 @@ export class OriginalAgentJobService {
       job.status = 'completed';
       job.finishedAt = new Date(this.now()).toISOString();
       job.errorCode = null;
+      this.lastErrors.delete(job.agent);
     } catch (_e) {
       // Never leak model credentials, response bodies or raw exceptions in task API.
       this.lastErrors.set(job.agent, 'model_request_failed');

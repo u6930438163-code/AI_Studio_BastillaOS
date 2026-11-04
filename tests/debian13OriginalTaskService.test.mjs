@@ -181,3 +181,53 @@ test('Original workers target the active Debian 13 repo without preset roles or 
     }), /invalid_review_task_contract/);
   } finally { f.dispose(); }
 });
+
+test('Shared Ollama serializes all four agents in arrival order across repeated ticks', async () => {
+  const calls = [];
+  const releases = [];
+  const f = fixture({execute: (agent) => {
+    calls.push(agent);
+    return new Promise(resolve => releases.push(() => resolve({
+      text: 'Ollama response', provider: 'ollama', model: 'local-test',
+    })));
+  }});
+  try {
+    const order = ['Aurelius', 'Aria', 'Astyria', 'Alex'];
+    const ids = order.map(agent => f.service.submitTask(body(agent)).taskId);
+    for (let i = 0; i < order.length; i++) {
+      await f.service.tick();
+      await f.service.tick();
+      assert.deepEqual(calls, order.slice(0, i + 1));
+      assert.equal(f.service.getWorkers().agents.filter(x => x.state === 'running').length, 1);
+      assert.equal(f.service.getJob(ids[i]).status, 'running');
+      releases[i]();
+      await eventually(() => f.service.getJob(ids[i]).status === 'completed');
+    }
+    assert.ok(ids.every(id => f.service.getJob(id).provider === 'ollama'));
+  } finally {
+    releases.forEach(release => release());
+    await new Promise(resolve => setImmediate(resolve));
+    f.dispose();
+  }
+});
+
+test('A failed agent releases Ollama for other agents and clears its error on recovery', async () => {
+  let alexCalls = 0;
+  const f = fixture({execute: async agent => {
+    if (agent === 'Alex' && ++alexCalls === 1) throw Error('Ollama unavailable');
+    return {text: 'Recovered response', provider: 'ollama', model: 'local-test'};
+  }});
+  try {
+    const alex = f.service.submitTask(body('Alex')).taskId;
+    const aria = f.service.submitTask(body('Aria')).taskId;
+    await f.service.tick();
+    await eventually(() => f.service.getJob(alex).errorCode === 'retry_scheduled');
+    await f.service.tick();
+    await eventually(() => f.service.getJob(aria).status === 'completed');
+    assert.equal(f.service.getJob(alex).attempts, 1);
+    f.now(31000);
+    await f.service.tick();
+    await eventually(() => f.service.getJob(alex).status === 'completed');
+    assert.equal(f.service.getWorkers().agents.find(x => x.name === 'Alex').lastErrorCode, null);
+  } finally { f.dispose(); }
+});
