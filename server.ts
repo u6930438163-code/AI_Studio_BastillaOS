@@ -5617,18 +5617,11 @@ const debian13Workers = new OriginalAgentJobService({
   providerConfigured: configuredProviders(LLM_CHAIN_CONFIG).length > 0,
   intervalMs: 5000,
   execute: async (agent: string, task: {kind:string; title:string; description:string; targetRepository:string}) => {
-    const originalId: ChatAgentName = agent === 'Aria' ? 'si_1' : agent as ChatAgentName;
-    // Existing original agent mission and genuine configured provider chain;
-    // never insert the legacy root-enabled chat safety instructions here.
+    // Debian 13 agents start without predefined roles, missions, personalities
+    // or custom instructions. The queue only handles operator-assigned tasks.
+    // Safety limits are enforced by the restricted worker API, not a persona prompt.
     const result = await generateWithChain(LLM_CHAIN_CONFIG, {
-      system: CHAT_AGENT_MISSIONS[originalId] + [
-        'Review an engineering task for the independent Debian 13 Trixie repository.',
-        'Only return a safe, reviewable Polish implementation plan or technical response.',
-        'DO NOT issue shell commands for execution, invoke /exec, /propose, buy, merge PRs, or change privileges.',
-        'You cannot directly access the repository or claim that code was changed.',
-        'Identify files to review, acceptance tests, risks, and suggested GitHub PR workflow.',
-        'This environment generates an analysis only; all actual source edits require a separate reviewed GitHub change.',
-      ].join(' '),
+      system: '',
       history: [],
       message: 'Project: ' + task.targetRepository + '\\nTask type: ' + task.kind +
         '\\nTitle: ' + task.title + '\\nDetails: ' + task.description,
