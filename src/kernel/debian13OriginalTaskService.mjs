@@ -12,6 +12,10 @@ import { randomUUID } from 'node:crypto';
 export const ORIGINAL_AGENTS = Object.freeze(['Alex', 'Aria', 'Astyria', 'Aurelius']);
 export const SOURCE_REPOSITORY = 'u6930438163-code/AI_Studio_BastillaOS';
 export const TARGET_REPOSITORY = 'u6930438163-code/Debian_13_Trixie';
+export const ALLOWED_TARGET_REPOSITORIES = Object.freeze([
+  TARGET_REPOSITORY, 'mmitek515-netizen/Debian_13',
+]);
+const TARGETS = new Set(ALLOWED_TARGET_REPOSITORIES);
 export const TASK_CAPABILITY = 'debian13_review_task_v1';
 export const MESSAGE_CAPABILITY = 'debian13_agent_message_v1';
 const MAX_JOBS = 300;
@@ -38,7 +42,7 @@ function cleanData(pathName) {
     const parsed = JSON.parse(fs.readFileSync(pathName, 'utf8'));
     if (!Array.isArray(parsed)) throw Error('invalid');
     return parsed.filter(x => x && SAFE_ID.test(x.id) && AGENT_IDS.has(x.agent)
-      && STATES.has(x.status) && x.targetRepository === TARGET_REPOSITORY).slice(-MAX_JOBS);
+      && STATES.has(x.status) && TARGETS.has(x.targetRepository)).slice(-MAX_JOBS);
   } catch (e) {
     if (e?.code === 'ENOENT') return [];
     // Never discard a corrupted queue and silently report an empty success.
@@ -82,14 +86,16 @@ export class OriginalAgentJobService {
     }
   }
 
-  _queue(agent, type, title, description, key = '') {
+  _queue(agent, type, title, description, targetRepository, key = '') {
+    if (!TARGETS.has(targetRepository)) throw new JobError('unsupported_target_repository');
     if (!AGENT_IDS.has(agent)) throw new JobError('unknown_original_agent');
     if (key && !SAFE_ID.test(key)) throw new JobError('invalid_idempotency_key');
     if (key) {
       const found = this.jobs.find(x => x.key === key);
       if (found) {
         if (found.agent !== agent || found.type !== type ||
-            found.title !== title || found.description !== description) {
+            found.title !== title || found.description !== description ||
+            found.targetRepository !== targetRepository) {
           throw new JobError('idempotency_key_conflict', 409);
         }
         return found;
@@ -99,7 +105,7 @@ export class OriginalAgentJobService {
     if (this.jobs.length >= MAX_JOBS) throw new JobError('queue_full', 429);
     const job = {
       id: randomUUID(), key, agent, type, title, description,
-      targetRepository: TARGET_REPOSITORY, status: 'queued',
+      targetRepository, status: 'queued',
       attempts: 0, createdAt: new Date(this.now()).toISOString(),
       startedAt: null, finishedAt: null, lastHeartbeatAt: null,
       nextAttemptAt: this.now(), result: null, errorCode: null,
@@ -114,11 +120,12 @@ export class OriginalAgentJobService {
     const agent = body?.agent;
     if (body?.capability !== TASK_CAPABILITY || body?.mode !== 'pull_request_proposal'
       || body?.autoMerge !== false || body?.purchaseAuthorized !== false
-      || !body?.task || body.task.targetRepository !== TARGET_REPOSITORY
+      || !body?.task || !TARGETS.has(body.task.targetRepository)
       || !SAFE_KINDS.has(body.task.kind)) throw new JobError('invalid_review_task_contract');
     const title = nonEmpty(body.task.title, 120, 'invalid_title');
     const description = nonEmpty(body.task.description, 2000, 'invalid_description');
-    const job = this._queue(agent, 'task', title, description, key);
+    const job = this._queue(agent, 'task', title, description,
+      body.task.targetRepository, key);
     return { accepted: true, agent, capability: TASK_CAPABILITY, taskId: job.id,
       status: job.status, workerExecutionVerified: job.status === 'completed' };
   }
@@ -127,9 +134,10 @@ export class OriginalAgentJobService {
     const agent = body?.agent;
     if (body?.mode !== 'review_only' || body?.autoMerge !== false
       || body?.purchaseAuthorized !== false
-      || body?.targetRepository !== TARGET_REPOSITORY) throw new JobError('invalid_message_contract');
+      || !TARGETS.has(body?.targetRepository)) throw new JobError('invalid_message_contract');
     const message = nonEmpty(body.message, 2000, 'invalid_message');
-    const job = this._queue(agent, 'message', 'Wiadomość operatora do ' + agent, message, key);
+    const job = this._queue(agent, 'message', 'Wiadomość operatora do ' + agent,
+      message, body.targetRepository, key);
     return { accepted: true, agent, messageId: job.id, status: job.status,
       agentReplyVerified: job.status === 'completed' };
   }
@@ -151,6 +159,7 @@ export class OriginalAgentJobService {
     return {
       sourceRepository: SOURCE_REPOSITORY,
       targetRepository: TARGET_REPOSITORY,
+      targetRepositories: [...ALLOWED_TARGET_REPOSITORIES],
       protocolVersion: 1,
       enabled: this.enabled,
       providerConfigured: this.providerConfigured,
@@ -177,6 +186,7 @@ export class OriginalAgentJobService {
   capabilities() {
     return {
       sourceRepository: SOURCE_REPOSITORY, protocolVersion: 1,
+      targetRepositories: [...ALLOWED_TARGET_REPOSITORIES],
       agents: [...ORIGINAL_AGENTS],
       agent: 'Alex', // Legacy capabilities reader: actual Issue-to-PR NOT advertised.
       capabilities: this.enabled && this.providerConfigured
