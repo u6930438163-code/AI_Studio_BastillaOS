@@ -14,3 +14,5 @@ bastillaos/vm-gemini-4/data/
 # Local AI tool binaries; never synchronize these with source.
 .bastilla-tools/
 
+# Runtime and local gateway logs; never commit operational state.
+.runtime/
