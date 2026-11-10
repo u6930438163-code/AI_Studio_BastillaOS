@@ -98,7 +98,7 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FALLBACK_NLP_BASE_URL = (process.env.FALLBACK_NLP_BASE_URL || 'https://api.groq.com/openai/v1').trim().replace(/\/+$/, '');
 const FALLBACK_NLP_API_KEY = (process.env.FALLBACK_NLP_API_KEY || '').trim();
 const FALLBACK_NLP_MODEL = (process.env.FALLBACK_NLP_MODEL || 'llama-3.3-70b-versatile').trim();
-// Czat triady: Gemini → xAI (Grok) → without_nlp. Wartości-zaślepki z .env.example są ignorowane.
+// Bastilla OS w AI Studio: Ollama → Gemini (jeśli klucz dostępny). Zewnętrzna Ollama musi odpowiadać rzeczywiście; bez symulowania stanu.
 const realKey = (value: string | undefined) => {
   const key = (value || '').trim();
   return /^(YOUR|MY)_/i.test(key) ? '' : key;
@@ -121,7 +121,7 @@ const LLM_CHAIN_CONFIG: LlmChainConfig = {
   ollamaNumPredict: Number(process.env.OLLAMA_NUM_PREDICT) || 0,
   ollamaNumThread: Number(process.env.OLLAMA_NUM_THREAD) || 0,
   // Zawsze dołączamy gemini, gdy klucz GEMINI_API_KEY jest dostępny w AI Studio
-  providers: (process.env.LLM_PROVIDERS || (realKey(GEMINI_API_KEY) ? 'gemini,ollama,xai' : 'ollama'))
+  providers: (process.env.LLM_PROVIDERS || (realKey(GEMINI_API_KEY) ? 'ollama,gemini' : 'ollama'))
     .split(',')
     .map((name) => name.trim().toLowerCase())
     .filter((name): name is 'gemini' | 'xai' | 'ollama' => name === 'gemini' || name === 'xai' || name === 'ollama'),
