@@ -6,17 +6,23 @@
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
   "forwardPorts": [
-    3000
+    3000,
+    8788
   ],
   "portsAttributes": {
     "3000": {
       "label": "BastillaOS web",
       "onAutoForward": "openPreview",
       "visibility": "private"
+    },
+    "8788": {
+      "label": "Bastilla MCP read-only gateway (publish manually after configuring bearer token)",
+      "onAutoForward": "silent",
+      "visibility": "private"
     }
   },
   "postCreateCommand": "npm ci && python3 --version && node --version && (docker compose version || echo 'Docker Compose unavailable; BastillaOS web app can still run')",
-  "postStartCommand": "bash scripts/start-codespaces.sh && bash scripts/start-codespaces-mcp.sh",
+  "postStartCommand": "bash scripts/start-codespaces.sh && bash scripts/start-codespaces-mcp.sh && bash scripts/start-codespaces-gateway.sh",
   "customizations": {
     "vscode": {
       "extensions": [
