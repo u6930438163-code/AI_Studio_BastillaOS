@@ -11,12 +11,23 @@ permissions:
   contents: read
 
 jobs:
+  verify_mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify MCP protocol, authorization and real-only data policy
+        run: node --test cloudflare/mcp/worker.test.mjs
+
   deploy:
+    needs: verify_mcp
     if: ${{ vars.BASTILLA_MCP_AUTO_DEPLOY == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Upload existing MCP Worker to Cloudflare
+      - name: Upload MCP Worker to Cloudflare
         env:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -34,7 +45,7 @@ jobs:
             --header "Authorization: Bearer ${CF_API_TOKEN}" \
             --form "metadata=@/tmp/bastilla-worker-metadata.json;type=application/json" \
             --form "worker.mjs=@cloudflare/mcp/worker.mjs;type=application/javascript+module"
-      - name: Check public Worker health
+      - name: Check actual public Worker health
         run: |
           curl --fail --silent --show-error --retry 5 --retry-delay 2 \
             https://bastilla-os-mcp.bastilla-u6930438163.workers.dev/health
